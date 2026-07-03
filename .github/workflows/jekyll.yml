@@ -1,0 +1,22 @@
+name: Build and Deploy Jekyll Site
+
+on:
+  push:
+    branches:
+      - main # Change this to your default branch name if different
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.0' # Adjust based on your Gemfile
+          bundler-cache: true
+
+      - name: Build Jekyll Site
+        run: bundle exec jekyll build
