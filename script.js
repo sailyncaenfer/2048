@@ -16,7 +16,7 @@
     { key:"invisible", name:"Invisible", accent:"rgb(222,222,222)",
       desc:"Only newly spawned tiles are shown." },
     { key:"magician",  name:"Magician",  accent:"rgb(150,40,140)",
-      desc:"Making the same merge twice spawns a temporary unmergeable block. Make merges to make it vanish." },
+      desc:"Making the same merge twice spawns a temporary unmergeable block. Make unique merges to make it vanish." },
     { key:"volatile",  name:"Volatile",  accent:"rgb(196,39,39)",
       desc:"Two new tiles spawn after every move instead of one." },
     { key:"blocked",   name:"Blocked",   accent:"rgb(40,36,30)",
@@ -113,6 +113,7 @@
     if (state.mods.blocked) randomSpawnBlock();
 
     hideOverlay();
+    stopAllMagicAnimations();
     tilesLayerEl.innerHTML = "";
     tileEls.clear();
     render();
@@ -334,14 +335,102 @@
   // and rebuilt from scratch every time.
   const tileEls = new Map();
 
+  // ---------- magic tile TV-static animation ----------
+  // Each magic tile gets its own <canvas> driving a noise effect (per-pixel
+  // crossfade between random bytes), keyed by the tile's persistent DOM
+  // element so it survives re-renders and only tears down when the tile
+  // itself is removed from the board.
+  const magicAnimators = new Map(); // el -> { raf }
+
+  function stopMagicAnimation(el){
+    const anim = magicAnimators.get(el);
+    if (anim){
+      cancelAnimationFrame(anim.raf);
+      magicAnimators.delete(el);
+    }
+  }
+
+  function stopAllMagicAnimations(){
+    for (const el of Array.from(magicAnimators.keys())) stopMagicAnimation(el);
+  }
+
+  function startMagicAnimation(el, canvas){
+    const ctx = canvas.getContext("2d");
+    const w = canvas.width, h = canvas.height;
+    const n = w * h;
+
+    const img = ctx.createImageData(w, h);
+    const d = img.data;
+    const bufA = new Uint8Array(n);
+    const bufB = new Uint8Array(n);
+    for (let i=0;i<n;i++){
+      bufA[i] = Math.floor(Math.random()*256);
+      bufB[i] = Math.floor(Math.random()*256);
+    }
+
+    const progress = new Float32Array(n);
+    const speeds = new Float32Array(n);
+    for (let i=0;i<n;i++){
+      progress[i] = Math.random();
+      speeds[i] = 0.5 + Math.random()*0.5;
+    }
+
+    const anim = { raf: null };
+    magicAnimators.set(el, anim);
+
+    function frame(){
+      for (let i=0;i<n;i++){
+        progress[i] += 0.02 * speeds[i];
+        if (progress[i] >= 1){
+          bufA[i] = bufB[i];
+          bufB[i] = Math.floor(Math.random()*256);
+          progress[i] -= 1;
+        }
+        const v = (bufA[i] + (bufB[i]-bufA[i]) * progress[i]) / 255;
+        const r = (v*100 + 20) | 0;
+        const g = (v*10) | 0;
+        const b = (v*120 + 50) | 0;
+        const p = i*4;
+        d[p]=r; d[p+1]=g; d[p+2]=b; d[p+3]=255;
+      }
+      ctx.putImageData(img, 0, 0);
+      if (magicAnimators.has(el)) anim.raf = requestAnimationFrame(frame);
+    }
+    anim.raf = requestAnimationFrame(frame);
+  }
+
   function styleTileContent(el, cellData, isMagic, magicVal){
     el.classList.remove("block", "magic");
     el.style.background = "";
     el.style.color = "";
+
     if (isMagic){
       el.classList.add("magic");
-      el.textContent = String(magicVal);
-    } else if (cellData.value === 1){
+      if (!el._magicCanvas){
+        el.innerHTML = "";
+        const canvas = document.createElement("canvas");
+        canvas.width = 50;
+        canvas.height = 50;
+        el.appendChild(canvas);
+        const label = document.createElement("span");
+        label.className = "magic-label";
+        el.appendChild(label);
+        el._magicCanvas = canvas;
+        el._magicLabel = label;
+        startMagicAnimation(el, canvas);
+      }
+      el._magicLabel.textContent = String(magicVal);
+      return;
+    }
+
+    if (el._magicCanvas){
+      stopMagicAnimation(el);
+      el._magicCanvas = null;
+      el._magicLabel = null;
+      el.innerHTML = "";
+    }
+
+    if (cellData.value === 1){
       el.classList.add("block");
       el.textContent = "VERY ANNOYING BLOCK!";
     } else {
@@ -434,6 +523,7 @@
     for (const [id, el] of Array.from(tileEls.entries())){
       if (newIds.has(id)) continue;
       tileEls.delete(id);
+      stopMagicAnimation(el);
       if (el._pulseTimeout){
         clearTimeout(el._pulseTimeout);
         el._pulseTimeout = null;
@@ -607,9 +697,7 @@
       card.classList.toggle("active", state.mods[m.key]);
     });
     const activeCount = MODS.filter(m => state.mods[m.key]).length;
-    comboNoteEl.textContent = activeCount >= 2
-      ? `${activeCount} mods combined \u2014 good luck.`
-      : "Combine two or more mods for chaos.";
+    comboNoteEl.textContent = "funny mods lol";
   }
 
   // ---------- boot ----------
