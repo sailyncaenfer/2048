@@ -626,11 +626,6 @@
       newGame();
       return;
     }
-
-    if (e.key in KEY_DIR){
-      e.preventDefault();
-      handleMove(KEY_DIR[e.key]);
-    }
   });
 
   document.getElementById("newGameBtn").addEventListener("click", newGame);
