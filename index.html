@@ -2,615 +2,73 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>2048 — Magician</title>
-<style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
-
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-  :root {
-    --bg:        #faf8ef;
-    --border:    #bbada0;
-    --cell:      #cdc1b4;
-    --text-dark: #776e65;
-    --text-light:#f9f6f2;
-    --score-bg:  #bbada0;
-    --radius:    6px;
-  }
-
-  body {
-    background: var(--bg);
-    font-family: 'Inter', sans-serif;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    min-height: 100vh;
-    padding: 24px 16px 40px;
-    color: var(--text-dark);
-    -webkit-tap-highlight-color: transparent;
-    user-select: none;
-  }
-
-  header {
-    width: 100%;
-    max-width: 480px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 16px;
-  }
-
-  h1 {
-    font-size: 2.6rem;
-    font-weight: 800;
-    color: var(--text-dark);
-    letter-spacing: -1px;
-    line-height: 1;
-  }
-
-  h1 span {
-    font-size: 0.9rem;
-    font-weight: 600;
-    display: block;
-    color: var(--border);
-    letter-spacing: 0.5px;
-    margin-top: 2px;
-  }
-
-  .scores {
-    display: flex;
-    gap: 8px;
-  }
-
-  .score-box {
-    background: var(--score-bg);
-    border-radius: var(--radius);
-    padding: 6px 14px;
-    text-align: center;
-    min-width: 70px;
-  }
-
-  .score-box .label {
-    font-size: 0.6rem;
-    font-weight: 700;
-    letter-spacing: 1px;
-    color: #eee4da;
-    text-transform: uppercase;
-  }
-
-  .score-box .value {
-    font-size: 1.15rem;
-    font-weight: 800;
-    color: #fff;
-    margin-top: 1px;
-  }
-
-  .toolbar {
-    width: 100%;
-    max-width: 480px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 14px;
-  }
-
-  .subtitle {
-    font-size: 0.78rem;
-    color: var(--border);
-  }
-
-  .btn-new {
-    background: var(--border);
-    color: #fff;
-    border: none;
-    border-radius: var(--radius);
-    padding: 8px 18px;
-    font-family: inherit;
-    font-size: 0.78rem;
-    font-weight: 700;
-    letter-spacing: 0.5px;
-    cursor: pointer;
-    transition: background 0.15s;
-  }
-
-  .btn-new:hover { background: #a89a8f; }
-
-  /* Board */
-  .board-wrap {
-    position: relative;
-    width: 100%;
-    max-width: 480px;
-  }
-
-  #board {
-    background: var(--border);
-    border-radius: 8px;
-    padding: 10px;
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 10px;
-    aspect-ratio: 1;
-    width: 100%;
-    touch-action: none;
-  }
-
-  .cell {
-    background: var(--cell);
-    border-radius: var(--radius);
-    position: relative;
-    overflow: hidden;
-    aspect-ratio: 1;
-  }
-
-  .tile {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: var(--radius);
-    font-weight: 800;
-    font-size: 1.6rem;
-    transition: transform 0.1s ease, background-color 0.1s ease;
-  }
-
-  /* magic tile: animated shimmer overlay, no fixed color */
-  .tile-magic {
-    position: absolute;
-    inset: 0;
-    border-radius: var(--radius);
-    overflow: hidden;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 800;
-    font-size: 1.6rem;
-    color: #fff;
-  }
-
-  .tile-magic canvas {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    border-radius: var(--radius);
-    filter: blur(1px); /* Add this to blur the rendering directly */
-    transform: scale(5); /* Scale up to hide the blur edges */
-  }
-
-  .tile-magic .magic-label {
-    position: relative;
-    z-index: 2;
-    pointer-events: none;
-    text-shadow: 0 0 8px rgba(0,0,0,0.5);
-  }
-
-  /* tile colors */
-  .t0    { background: #cdc1b4; color: transparent; }
-  .t2    { background: #eee4da; color: #776e65; }
-  .t4    { background: #ede0c8; color: #776e65; }
-  .t8    { background: #f2b179; color: #f9f6f2; }
-  .t16   { background: #f59563; color: #f9f6f2; }
-  .t32   { background: #f67c5f; color: #f9f6f2; }
-  .t64   { background: #f65e3b; color: #f9f6f2; }
-  .t128  { background: #edcf72; color: #f9f6f2; font-size: 1.35rem; }
-  .t256  { background: #edcc61; color: #f9f6f2; font-size: 1.35rem; }
-  .t512  { background: #edc850; color: #f9f6f2; font-size: 1.35rem; }
-  .t1024 { background: #edc53f; color: #f9f6f2; font-size: 1.1rem; }
-  .t2048 { background: #edc22e; color: #f9f6f2; font-size: 1.1rem; }
-  .tsuper{ background: #3c3a32; color: #f9f6f2; font-size: 0.95rem; }
-
-  /* game-over overlay */
-  #overlay {
-    display: none;
-    position: absolute;
-    inset: 0;
-    background: rgba(238,228,218,0.73);
-    border-radius: 8px;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 16px;
-    z-index: 10;
-  }
-
-  #overlay.visible { display: flex; }
-
-  #overlay h2 {
-    font-size: 2rem;
-    font-weight: 800;
-    color: var(--text-dark);
-  }
-
-  #overlay p {
-    font-size: 0.85rem;
-    color: var(--text-dark);
-  }
-
-  #overlay .btn-new {
-    font-size: 0.9rem;
-    padding: 10px 28px;
-  }
-
-  /* footer hint */
-  .hint {
-    margin-top: 18px;
-    font-size: 0.72rem;
-    color: var(--border);
-    text-align: center;
-    line-height: 1.6;
-  }
-
-  /* magic legend */
-  .legend {
-    margin-top: 14px;
-    max-width: 480px;
-    width: 100%;
-    background: #f0ebe3;
-    border-radius: var(--radius);
-    padding: 10px 14px;
-    font-size: 0.73rem;
-    color: var(--text-dark);
-    line-height: 1.6;
-  }
-
-  .legend strong { font-weight: 700; color: #6b5e96; }
-
-  @media (max-width: 400px) {
-    h1 { font-size: 2rem; }
-    .tile { font-size: 1.2rem; }
-    .t128, .t256, .t512 { font-size: 1.05rem; }
-    .t1024, .t2048 { font-size: 0.85rem; }
-    .tsuper { font-size: 0.72rem; }
-  }
-</style>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<title>2048 &mdash; Mod Lab</title>
+<link rel="stylesheet" href="styles.css">
 </head>
 <body>
+<div class="app">
+  <header class="title">
+    <button class="settings-btn" id="settingsBtn" type="button" aria-label="Open mods and settings">
+      <span class="gear">&#9881;</span> Mods &amp; Settings
+    </button>
+    <h1>2048 <span style="font-weight:400; font-size:0.55em; color:rgb(140,128,112);"></span></h1>
+    <p>2048 with like mods and stuff idk</p>
+  </header>
 
-<header>
-  <h1>2048 <span>✦ magician</span></h1>
-  <div class="scores">
-    <div class="score-box">
-      <div class="label">Score</div>
-      <div class="value" id="score">0</div>
+  <div class="board-column">
+    <div class="hud">
+      <div class="active-mods" id="activeModsRow"></div>
+      <div class="scorebar">
+        <div class="score-box"><div class="label">Best</div><div class="value" id="bestVal">0</div></div>
+        <div class="score-box"><div class="label">Score</div><div class="value" id="scoreVal">0</div></div>
+        <div class="score-box"><div class="label">Moves</div><div class="value" id="movesVal">0</div></div>
+      </div>
     </div>
-    <div class="score-box">
-      <div class="label">Best</div>
-      <div class="value" id="best">0</div>
+    <div class="board-wrap" id="boardWrap">
+      <div class="board" id="cellGrid"></div>
+      <div class="tiles-layer" id="tilesLayer"></div>
+      <div class="overlay" id="overlay">
+        <h2 id="overlayTitle">Game Over</h2>
+        <p id="overlaySub">No more moves left on the board.</p>
+        <div class="buttons">
+          <button class="pill" id="overlayRestart">Try Again</button>
+        </div>
+      </div>
     </div>
-    <div class="score-box">
-      <div class="label">Moves</div>
-      <div class="value" id="moves">0</div>
+    <div class="toolbar">
+      <button class="pill" id="newGameBtn">New Game</button>
+      <button class="pill secondary" id="resetModsBtn">Clear Mods</button>
+    </div>
+    <p class="hint">Move with <kbd>&#8593;</kbd><kbd>&#8595;</kbd><kbd>&#8592;</kbd><kbd>&#8594;</kbd> or <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> &mdash; swipe on touch devices.</p>
+  </div>
+
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal" role="dialog" aria-modal="true" aria-label="Mods and settings">
+      <div class="modal-header">
+        <h2>Mods &amp; Settings</h2>
+        <button class="modal-close" id="modalClose" type="button" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <section class="anim-section">
+          <h3>Animation</h3>
+          <!--<p class="sub">Choose whether moves slide and tiles pop in, or resolve instantly.</p>-->
+          <div class="segmented" id="animSegment">
+            <button class="seg-btn" data-val="on" type="button">Animated</button>
+            <button class="seg-btn" data-val="off" type="button">Instant</button>
+          </div>
+        </section>
+        <section class="mods-section">
+          <h3>Mods</h3>
+          <!--<p class="sub">Toggle any combination. Changing a mod starts a fresh game.</p>-->
+          <div id="modList"></div>
+          <div class="panel-footer" id="comboNote"></div>
+        </section>
+      </div>
     </div>
   </div>
-</header>
 
-<div class="toolbar">
-  <div class="subtitle">Merge tiles to reach 2048!</div>
-  <button class="btn-new" id="btnNew">New Game</button>
+  <script src="script.js"></script>
 </div>
-
-<div class="board-wrap">
-  <div id="board"></div>
-  <div id="overlay">
-    <h2>Game Over</h2>
-    <p>No moves left.</p>
-    <button class="btn-new" id="btnRestart">Play Again</button>
-  </div>
-</div>
-
-<div class="legend">
-  <strong>Magician tiles</strong> are shimmering void blocks — they can slide but cannot merge.<br>
-  A magic block spawns whenever you make the same merge twice in a row. Its counter ticks down one step per qualifying (unique) merge; when it reaches zero, the block vanishes.
-</div>
-
-<div class="hint">
-  Use arrow keys, WASD, or swipe to move tiles.
-</div>
-
-<script>
-/* =====================================================================
-   Game logic — faithful JS port of 2048_magician.c
-   ===================================================================== */
-
-const MAGIC_VALUE = -1;
-
-let board, magicCounter, score, best, moves, lastMergeValue;
-
-function initGame() {
-  board = Array.from({length:4}, () => new Array(4).fill(0));
-  magicCounter = Array.from({length:4}, () => new Array(4).fill(0));
-  score = 0;
-  moves = 0;
-  lastMergeValue = 0;
-  randomSpawn();
-  randomSpawn();
-  render();
-  document.getElementById('overlay').classList.remove('visible');
-}
-
-function randomSpawn() {
-  const empty = [];
-  for (let r=0;r<4;r++) for (let c=0;c<4;c++) if (board[r][c]===0) empty.push([r,c]);
-  if (!empty.length) return;
-  const [r,c] = empty[Math.floor(Math.random()*empty.length)];
-  board[r][c] = Math.random() < 0.1 ? 4 : 2;
-}
-
-function rotateRight(b) {
-  const t = Array.from({length:4},()=>new Array(4).fill(0));
-  for (let r=0;r<4;r++) for (let c=0;c<4;c++) t[r][c]=b[3-c][r];
-  for (let r=0;r<4;r++) for (let c=0;c<4;c++) b[r][c]=t[r][c];
-}
-
-function moveAndMerge(dir) {
-  const merged = Array.from({length:4},()=>new Array(4).fill(0));
-  const mergeValues = [];
-
-  for (let i=0;i<dir;i++) { rotateRight(board); rotateRight(magicCounter); }
-
-  // merge left
-  for (let r=0;r<4;r++) {
-    for (let c=0;c<4;c++) {
-      if (board[r][c]===0) continue;
-      let col=c;
-      let ret;
-      do {
-        ret = moveTileLeft(r,col,merged,mergeValues);
-        if (ret==='moved') col--;
-      } while (ret==='moved');
-    }
-  }
-
-  let d=dir;
-  do { rotateRight(board); rotateRight(magicCounter); d++; } while (d<4);
-
-  return mergeValues;
-}
-
-function moveTileLeft(r,c,merged,mergeValues) {
-  if (c===0) return 'blocked';
-  if (board[r][c-1]===0) {
-    board[r][c-1]=board[r][c]; magicCounter[r][c-1]=magicCounter[r][c];
-    board[r][c]=0;             magicCounter[r][c]=0;
-    return 'moved';
-  }
-  if (magicCounter[r][c]!==0 || magicCounter[r][c-1]!==0) return 'blocked';
-  if (board[r][c-1]!==board[r][c]) return 'blocked';
-  if (!merged[r][c-1]) {
-    board[r][c-1]*=2; board[r][c]=0; merged[r][c-1]=1;
-    score += board[r][c-1];
-    mergeValues.push(board[r][c-1]);
-    return 'merged';
-  }
-  return 'blocked';
-}
-
-function isChanged(prev) {
-  for (let r=0;r<4;r++) for (let c=0;c<4;c++) if (board[r][c]!==prev[r][c]) return true;
-  return false;
-}
-
-function isLost() {
-  for (let r=0;r<4;r++) for (let c=0;c<4;c++) {
-    if (board[r][c]===0) return false;
-    const cm=magicCounter[r][c]!==0;
-    if (r<3) { const dm=magicCounter[r+1][c]!==0; if (!cm&&!dm&&board[r][c]===board[r+1][c]) return false; }
-    if (c<3) { const rm=magicCounter[r][c+1]!==0; if (!cm&&!rm&&board[r][c]===board[r][c+1]) return false; }
-  }
-  return true;
-}
-
-function getHighestTile() {
-  let h=0;
-  for (let r=0;r<4;r++) for (let c=0;c<4;c++) if (magicCounter[r][c]===0 && board[r][c]>h) h=board[r][c];
-  return h;
-}
-
-function magicCounterValue(highest) {
-  if (highest<4) return 1;
-  const v = Math.floor(Math.log2(highest)+1e-6)-1;
-  return v<1?1:v;
-}
-
-function spawnMagicBlock() {
-  const empty=[];
-  for (let r=0;r<4;r++) for (let c=0;c<4;c++) if (board[r][c]===0) empty.push([r,c]);
-  if (!empty.length) return;
-  const [r,c]=empty[Math.floor(Math.random()*empty.length)];
-  board[r][c]=MAGIC_VALUE;
-  magicCounter[r][c]=magicCounterValue(getHighestTile());
-}
-
-function processMagic(mergeValues) {
-  let decrement=false, spawns=0;
-  for (let i=0;i<mergeValues.length;i++) {
-    let dup=false;
-    if (lastMergeValue===mergeValues[i]) dup=true;
-    for (let j=0;j<i;j++) if (mergeValues[j]===mergeValues[i]) { dup=true; break; }
-    if (dup) spawns++; else decrement=true;
-  }
-  if (mergeValues.length) lastMergeValue=mergeValues[mergeValues.length-1];
-
-  if (decrement && spawns===0) {
-    for (let r=0;r<4;r++) for (let c=0;c<4;c++) {
-      if (magicCounter[r][c]>0) {
-        magicCounter[r][c]--;
-        if (magicCounter[r][c]===0) board[r][c]=0;
-      }
-    }
-  }
-  for (let i=0;i<spawns;i++) spawnMagicBlock();
-}
-
-function handleDirection(dir) {
-  const prev = board.map(r=>[...r]);
-  const mergeValues = moveAndMerge(dir);
-  if (!isChanged(prev)) return;
-  processMagic(mergeValues);
-  randomSpawn();
-  if (score>best) { best=score; localStorage.setItem('2048m_best', best); }
-  moves++;
-  render();
-  if (isLost()) setTimeout(()=>document.getElementById('overlay').classList.add('visible'),200);
-}
-
-/* =====================================================================
-   Rendering
-   ===================================================================== */
-
-const TILE_CLASSES = {
-  0:'t0', 2:'t2', 4:'t4', 8:'t8', 16:'t16', 32:'t32', 64:'t64',
-  128:'t128', 256:'t256', 512:'t512', 1024:'t1024', 2048:'t2048'
-};
-
-function tileClass(v) {
-  if (v===0) return 't0';
-  return TILE_CLASSES[v] || 'tsuper';
-}
-
-// Per-cell magic canvas animators
-const magicAnimators = {};
-
-function stopAllMagic() {
-  for (const k in magicAnimators) {
-    cancelAnimationFrame(magicAnimators[k].raf);
-    delete magicAnimators[k];
-  }
-}
-
-function startMagicAnimation(canvas) {
-  const ctx = canvas.getContext('2d');
-  const key = canvas.dataset.key;
-  const w = canvas.width, h = canvas.height;
-  const n = w * h;
-
-  // --- ADD THESE VARIABLES ---
-  const img = ctx.createImageData(w, h);
-  const d = img.data;
-  const bufA = new Uint8Array(n);
-  const bufB = new Uint8Array(n);
-  
-  // Initialize buffers with random bytes
-  for (let i = 0; i < n; i++) {
-    bufA[i] = Math.floor(Math.random() * 256);
-    bufB[i] = Math.floor(Math.random() * 256);
-  }
-  // ---------------------------
-
-  const progress = new Float32Array(n);
-  const speeds = new Float32Array(n);
-
-  for (let i = 0; i < n; i++) {
-    progress[i] = Math.random();
-    speeds[i] = 0.5 + Math.random() * 0.5;
-  }
-
-  function frame() {
-    for (let i = 0; i < n; i++) {
-      progress[i] += 0.02 * speeds[i];
-
-      if (progress[i] >= 1) {
-        bufA[i] = bufB[i];
-        bufB[i] = Math.floor(Math.random() * 256); // Replaces randByte()
-        progress[i] -= 1;
-      }
-
-      const v = (bufA[i] + (bufB[i] - bufA[i]) * progress[i]) / 255;
-
-      const r = (v * 120 + 20) | 0;
-      const g = (v * 10)       | 0;
-      const b = (v * 180 + 60) | 0;
-
-      const p = i * 4;
-      d[p] = r; d[p+1] = g; d[p+2] = b; d[p+3] = 255;
-    }
-
-    ctx.putImageData(img, 0, 0);
-    if (magicAnimators[key]) magicAnimators[key].raf = requestAnimationFrame(frame);
-  }
-
-  magicAnimators[key] = {raf: requestAnimationFrame(frame)};
-}
-
-function render() {
-  document.getElementById('score').textContent=score;
-  document.getElementById('best').textContent=best;
-  document.getElementById('moves').textContent=moves;
-
-  stopAllMagic();
-  const boardEl=document.getElementById('board');
-  boardEl.innerHTML='';
-
-  for (let r=0;r<4;r++) {
-    for (let c=0;c<4;c++) {
-      const cell=document.createElement('div');
-      cell.className='cell';
-
-      const v=board[r][c];
-      const mc=magicCounter[r][c];
-
-      if (mc!==0) {
-        // magic tile
-        const magic=document.createElement('div');
-        magic.className='tile-magic';
-        const canvas=document.createElement('canvas');
-        const key=`${r}-${c}`;
-        canvas.dataset.key=key;
-        canvas.width=50; canvas.height=50;
-        magic.appendChild(canvas);
-        const label=document.createElement('span');
-        label.className='magic-label';
-        label.textContent=mc;
-        magic.appendChild(label);
-        cell.appendChild(magic);
-        magicAnimators[key]={raf:null};
-        requestAnimationFrame(()=>startMagicAnimation(canvas));
-      } else if (v!==0) {
-        const tile=document.createElement('div');
-        tile.className=`tile ${tileClass(v)}`;
-        tile.textContent=v;
-        cell.appendChild(tile);
-      } else {
-        const tile=document.createElement('div');
-        tile.className='tile t0';
-        cell.appendChild(tile);
-      }
-
-      boardEl.appendChild(cell);
-    }
-  }
-}
-
-/* =====================================================================
-   Input
-   ===================================================================== */
-
-document.addEventListener('keydown', e=>{
-  const map={'ArrowUp':3,'KeyW':3,'ArrowLeft':0,'KeyA':0,'ArrowDown':1,'KeyS':1,'ArrowRight':2,'KeyD':2};
-  if (map[e.code]!==undefined) { e.preventDefault(); handleDirection(map[e.code]); }
-});
-
-// Touch / swipe
-let tx0,ty0;
-const boardEl=document.getElementById('board');
-boardEl.addEventListener('touchstart',e=>{tx0=e.touches[0].clientX;ty0=e.touches[0].clientY;},{passive:true});
-boardEl.addEventListener('touchend',e=>{
-  const dx=e.changedTouches[0].clientX-tx0;
-  const dy=e.changedTouches[0].clientY-ty0;
-  if (Math.abs(dx)<20&&Math.abs(dy)<20) return;
-  if (Math.abs(dx)>Math.abs(dy)) handleDirection(dx<0?0:2);
-  else handleDirection(dy<0?3:1);
-});
-
-document.getElementById('btnNew').addEventListener('click',()=>initGame());
-document.getElementById('btnRestart').addEventListener('click',()=>initGame());
-
-// Load best
-best = parseInt(localStorage.getItem('2048m_best')||'0');
-
-initGame();
-</script>
 </body>
 </html>
