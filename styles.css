@@ -215,16 +215,23 @@
 
   .tile.magic{
     color:#fff;
-    background: linear-gradient(135deg, rgb(120,10,120), rgb(50,0,90));
-    background-size: 220% 220%;
-    animation: shimmer 2.4s ease-in-out infinite;
-    box-shadow: inset 0 0 14px rgba(255,255,255,0.25);
+    overflow:hidden;
     font-size: clamp(16px, 4.6vw, 28px);
   }
-  @keyframes shimmer{
-    0%{ background-position: 0% 50%; }
-    50%{ background-position: 100% 50%; }
-    100%{ background-position: 0% 50%; }
+  .tile.magic canvas{
+    position:absolute;
+    inset:0;
+    width:100%;
+    height:100%;
+    border-radius:6px;
+    filter: blur(1px);
+    transform: scale(5);
+  }
+  .tile.magic .magic-label{
+    position:relative;
+    z-index:2;
+    pointer-events:none;
+    text-shadow: 0 0 8px rgba(0,0,0,0.5);
   }
 
   .overlay{
@@ -308,9 +315,10 @@
     border-bottom: 1px solid rgb(224,213,196);
   }
   .modal-header h2{
-    margin:0;
-    font-family: Georgia, serif;
+    margin: 0;
+    font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
     font-size: 20px;
+    font-weight: 700;
     color: rgb(90,80,68);
   }
   .modal-close{
