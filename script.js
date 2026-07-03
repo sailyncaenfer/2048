@@ -615,6 +615,24 @@
     }
   }, {passive:true});
 
+  window.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && modalOverlay.classList.contains("show")){
+    closeModal();
+    return;
+  }
+  
+  // Add this block to handle 'R' for restart
+    if (e.key === "r" || e.key === "R") {
+      newGame();
+      return;
+    }
+
+    if (e.key in KEY_DIR){
+      e.preventDefault();
+      handleMove(KEY_DIR[e.key]);
+    }
+  });
+
   document.getElementById("newGameBtn").addEventListener("click", newGame);
   document.getElementById("overlayRestart").addEventListener("click", newGame);
   document.getElementById("resetModsBtn").addEventListener("click", () => {
