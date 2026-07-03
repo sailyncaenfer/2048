@@ -616,12 +616,12 @@
   }, {passive:true});
 
   window.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && modalOverlay.classList.contains("show")){
-    closeModal();
-    return;
-  }
+    if (e.key === "Escape" && modalOverlay.classList.contains("show")){
+      closeModal();
+      return;
+    }
   
-  // Add this block to handle 'R' for restart
+    // Add this block to handle 'R' for restart
     if (e.key === "r" || e.key === "R") {
       newGame();
       return;
@@ -723,4 +723,4 @@
   syncAnimButtons();
   loadBestScore();
   newGame();
-})();  
+})();
