@@ -705,4 +705,4 @@
   syncAnimButtons();
   loadBestScore();
   newGame();
-})();
+})();  
