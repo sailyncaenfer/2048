@@ -234,32 +234,142 @@
     text-shadow: 0 0 8px rgba(0,0,0,0.5);
   }
 
+  /* Game-over popup: a true floating window centered on the viewport
+     (not clipped to the board), so closing it leaves an unobstructed
+     view of the final board underneath. */
   .overlay{
-    position:absolute;
-    inset:12px;
-    border-radius:6px;
-    background: rgba(250,248,239,0.92);
+    position:fixed;
+    inset:0;
+    background: rgba(40,34,26,0.45);
     display:flex;
-    flex-direction:column;
     align-items:center;
     justify-content:center;
-    gap:14px;
+    padding: 20px;
     opacity:0;
     pointer-events:none;
     transition: opacity .2s ease;
-    text-align:center;
-    padding: 20px;
-    z-index: 5;
+    z-index: 200;
   }
   .overlay.show{ opacity:1; pointer-events:all; }
-  .overlay h2{
+
+  .overlay-window{
+    position:relative;
+    background: rgb(250,248,239);
+    border-radius: 14px;
+    width:100%;
+    max-width: 320px;
+    padding: 30px 26px 24px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:14px;
+    text-align:center;
+    box-shadow: 0 18px 50px rgba(0,0,0,0.32);
+    transform: translateY(10px) scale(0.98);
+    transition: transform .2s ease;
+    font-family: inherit; /* use the page's default font, not a special one */
+  }
+  .overlay.show .overlay-window{ transform: translateY(0) scale(1); }
+
+  .overlay-window .overlay-close{
+    position:absolute;
+    top:6px;
+    right:8px;
+    border:none;
+    background:transparent;
+    font-size:22px;
+    line-height:1;
+    color: rgb(140,128,112);
+    cursor:pointer;
+    padding:4px 9px;
+    border-radius:6px;
+    transition: background .15s ease;
+  }
+  .overlay-window .overlay-close:hover{ background: rgba(120,101,79,0.08); }
+
+  .overlay-window h2{
     margin:0;
-    font-family: Georgia, serif;
-    font-size: 30px;
+    font-family: inherit;
+    font-weight:700;
+    font-size: 26px;
     color: rgb(90,80,68);
   }
-  .overlay p{ margin:0; color: rgb(120,108,96); font-size:14px; max-width:280px;}
-  .overlay .buttons{ display:flex; gap:10px; }
+  .overlay-window p{ margin:0; color: rgb(120,108,96); font-size:14px; max-width:280px;}
+  .overlay-window .buttons{ display:flex; gap:10px; }
+
+  /* ---- Magician merge log ---- */
+  /* Lives inside #boardWrap so it can be anchored to the board itself.
+     On mobile it floats as a card just above the board (full width).
+     On wider screens it becomes a sidebar to the left of the board.
+     Only one offset edge is set in each case (never top+bottom), so
+     height stays auto - it grows/shrinks with the number of entries. */
+  .magic-log{
+    display:none;
+    position:absolute;
+    left:0;
+    right:0;
+    bottom:100%;
+    margin-bottom:14px;
+    background:#fff;
+    border:1.5px solid rgb(200,187,168);
+    border-radius:10px;
+    padding:10px 12px;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.08);
+    max-height:120px;
+  }
+  .magic-log.show{ display:flex; flex-direction:column; gap:8px; }
+  .magic-log h4{
+    margin:0;
+    font-size:11px;
+    font-weight:800;
+    letter-spacing:0.5px;
+    text-transform:uppercase;
+    color: rgb(150,40,140);
+  }
+  .magic-log .log-list{
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px;
+    max-height:76px;
+    overflow-y:auto;
+  }
+  .magic-log .log-item{
+    background: rgba(150,40,140,0.12);
+    color: rgb(120,30,110);
+    font-weight:700;
+    font-size:12px;
+    padding:3px 9px;
+    border-radius:999px;
+    flex-shrink:0;
+  }
+  .magic-log .log-empty{
+    margin:0;
+    font-size:12px;
+    color: rgb(160,148,132);
+    font-style:italic;
+  }
+
+  @media (min-width: 760px){
+    /* Detach into a sidebar to the left of the board. Only "left" and
+       "top" are set (not "right"/"bottom"), so the box's height stays
+       auto - it grows with the number of merged-value entries, capped
+       by max-height below. */
+    .magic-log.show{
+      left: -190px;
+      right:auto;
+      bottom:auto;
+      top: 0;
+      margin-bottom:0;
+      width:170px;
+      max-height:70vh;
+    }
+    .magic-log .log-list{
+      flex-direction:column;
+      flex-wrap:nowrap;
+      max-height:calc(70vh - 46px);
+    }
+    .magic-log .log-item{ align-self:flex-start; }
+  }
 
   .hint{
     text-align:center;
@@ -370,70 +480,67 @@
   .seg-btn.active{ background: rgb(143,122,97); color:#fff; }
   .seg-btn:hover:not(.active){ background: rgba(120,101,79,0.08); }
 
-  .mod-card{
-    border: 1.5px solid rgb(224,213,196);
-    border-radius: 10px;
-    padding: 12px 12px 12px 14px;
-    margin-bottom: 10px;
-    display:flex;
-    gap: 12px;
-    align-items:flex-start;
-    cursor:pointer;
+  /* Mods are shown as a grid of abbreviated squares. Clicking a square
+     toggles that mod: active squares tilt 10deg clockwise and brighten
+     so it's obvious at a glance which mods are live. */
+  .mod-grid {
+    display: grid;
+    /* Increase columns to fit more items, making each one narrower by default */
+    grid-template-columns: repeat(6, 1fr); 
+    gap: 5px; /* Set a consistent gap for both row and column */
+    margin-bottom: 16px;
+  }
+  .mod-square {
+    /* Reduce max-width to make the square physically smaller */
+    width: 32px;
+    height: 32px; 
+    margin: 0 auto;
+    aspect-ratio: 1 / 1;
+    border: 2px solid rgb(224,213,196);
+    border-radius: 4px; /* Smaller radius to match smaller size */
     background: #fff;
-    transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+    transition: transform .18s ease, filter .18s ease, border-color .15s ease, box-shadow .15s ease;
   }
-  .mod-card:hover{ border-color: rgb(190,175,155); }
-  .mod-card.active{
-    background: rgba(255,255,255,0.95);
-    box-shadow: 0 0 0 2px var(--accent, rgb(190,175,155)) inset;
+  .mod-square:hover{ border-color: rgb(190,175,155); }
+  .mod-square:active{ transform: scale(0.96); }
+  .mod-square .abbr{
+    font-weight: 800;
+    font-size: 12px; /* Reduced from 20px to fit the new size */
+    letter-spacing: 0.5px;
+    color: var(--accent, rgb(120,101,79));
+  }
+  .mod-square.active {
+    transform: rotate(10deg);
+    filter: brightness(1.35);
     border-color: var(--accent, rgb(190,175,155));
+    /* Change the box-shadow to use a blur radius */
+    box-shadow: 0 0 4px 1px var(--accent, rgb(190,175,155));
   }
-  .mod-card .swatch{
-    width:10px;
-    align-self:stretch;
-    border-radius:5px;
-    background: var(--accent, #ccc);
-    flex-shrink:0;
-  }
-  .mod-card .body{ flex:1; }
-  .mod-card .row1{
+  .mod-square.active:active{ transform: rotate(10deg) scale(0.96); }
+
+  /* Description panel at the bottom of the mods section, showing info
+     for whichever mod(s) are currently selected/active. */
+  .mod-desc-panel{
+    border-top: 1px solid rgb(224,213,196);
+    padding-top: 12px;
     display:flex;
-    align-items:center;
-    justify-content:space-between;
+    flex-direction:column;
     gap:8px;
   }
-  .mod-card .name{ font-weight:800; font-size:14.5px; }
-  .mod-card .desc{ font-size:12.5px; color: rgb(110,100,90); margin-top:3px; line-height:1.4; }
-
-  .switch{
-    position:relative;
-    width:38px;
-    height:22px;
-    flex-shrink:0;
-  }
-  .switch input{ opacity:0; width:0; height:0; }
-  .switch .slider{
-    position:absolute; inset:0;
-    background: rgb(216,205,190);
-    border-radius:999px;
-    transition: background .15s ease;
-  }
-  .switch .slider:before{
-    content:"";
-    position:absolute;
-    height:16px; width:16px;
-    left:3px; top:3px;
-    background:#fff;
-    border-radius:50%;
-    transition: transform .15s ease;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
-  }
-  .switch input:checked + .slider{ background: var(--accent, rgb(143,122,97)); }
-  .switch input:checked + .slider:before{ transform: translateX(16px); }
-
-  .panel-footer{
-    margin-top: 6px;
-    font-size:11.5px;
-    color: rgb(150,138,122);
+  .mod-desc-item{
+    font-size: 12.5px;
     line-height:1.5;
+    color: rgb(110,100,90);
+  }
+  .mod-desc-item b{ color: rgb(90,80,68); }
+  .mod-desc-empty{
+    margin:0;
+    font-size: 12px;
+    color: rgb(150,138,122);
+    font-style: italic;
   }
