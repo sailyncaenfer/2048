@@ -486,7 +486,7 @@
   .mod-grid {
     display: grid;
     /* Increase columns to fit more items, making each one narrower by default */
-    grid-template-columns: repeat(6, 1fr); 
+    grid-template-columns: repeat(7, 1fr); 
     gap: 5px; /* Set a consistent gap for both row and column */
     margin-bottom: 16px;
   }
