@@ -22,7 +22,7 @@
     { key:"blocked",   name:"Blocked",   abbr:"BL", accent:"rgb(40,36,30)",
       desc:"An unmergeable tile is spawned at the start of the game." },
     { key:"touch",     name:"Touch",     abbr:"TC", accent:"rgb(0,150,136)",
-      desc:"Tiles only merge if they were already touching, with no gap between them. Sliding two matching tiles together across an empty cell no longer merges them." },
+      desc:"Only adjacent tiles can be merged." },
   ];
 
   let nextTileId = 1;
