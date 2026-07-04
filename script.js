@@ -11,17 +11,17 @@
                     "var(--fg-light)","var(--fg-light)","var(--fg-light)","var(--fg-light)","var(--fg-light)","var(--fg-light)","var(--fg-light)"];
 
   const MODS = [
-    { key:"gravity",   name:"Gravity",   accent:"rgb(93,138,168)",
+    { key:"gravity",   name:"Gravity",   abbr:"GR", accent:"rgb(93,138,168)",
       desc:"Every move is performed twice." },
-    { key:"invisible", name:"Invisible", accent:"rgb(222,222,222)",
+    { key:"invisible", name:"Invisible", abbr:"IV", accent:"rgb(150,140,140)",
       desc:"Only newly spawned tiles are shown." },
-    { key:"magician",  name:"Magician",  accent:"rgb(150,40,140)",
+    { key:"magician",  name:"Magician",  abbr:"MG", accent:"rgb(150,40,140)",
       desc:"Making the same merge twice spawns a temporary unmergeable block. Make unique merges to make it vanish." },
-    { key:"volatile",  name:"Volatile",  accent:"rgb(196,39,39)",
+    { key:"volatile",  name:"Volatile",  abbr:"VL", accent:"rgb(196,39,39)",
       desc:"Two new tiles spawn after every move instead of one." },
-    { key:"blocked",   name:"Blocked",   accent:"rgb(40,36,30)",
+    { key:"blocked",   name:"Blocked",   abbr:"BL", accent:"rgb(40,36,30)",
       desc:"An unmergeable tile is spawned at the start of the game." },
-    { key:"touch",     name:"Touch",     accent:"rgb(0,150,136)",
+    { key:"touch",     name:"Touch",     abbr:"TC", accent:"rgb(0,150,136)",
       desc:"Tiles only merge if they were already touching, with no gap between them. Sliding two matching tiles together across an empty cell no longer merges them." },
   ];
 
@@ -33,6 +33,7 @@
     score:0, best:0, moveCount:0, gameOver:false,
     lastMergeValue:0,
     spawnLocs: [],
+    magicLog: [],   // history of merge values while Magician is active, newest first
     animationsEnabled: true,
     mods: { gravity:false, invisible:false, magician:false, volatile:false, blocked:false, touch:false }
   };
@@ -107,6 +108,7 @@
     state.gameOver = false;
     state.lastMergeValue = 0;
     state.spawnLocs = [];
+    state.magicLog = [];
 
     const s1 = randomSpawn();
     const s2 = randomSpawn();
@@ -157,11 +159,13 @@
     if (b[row][col-1].value !== b[row][col].value) return BLOCKED;
 
     if (!merged[row][col-1]){
+      const preMergeValue = b[row][col].value;
       b[row][col-1].value *= 2;
       b[row][col] = null;
       merged[row][col-1] = 1;
       state.score += b[row][col-1].value;
-      mergeValues.push(b[row][col-1].value);
+      
+      mergeValues.push(preMergeValue);
       return MERGED;
     }
 
@@ -334,11 +338,21 @@
       mergeValues = mergeValues.concat(moveAndMergeOnce(direction));
     }
 
+    let justSpawned = [];
+
     const changed = !boardsEqual(before, state.board);
 
-    let justSpawned = [];
     if (changed){
-      if (state.mods.magician) processMagic(mergeValues);
+      if (state.mods.magician){
+        processMagic(mergeValues);
+        
+        // ONLY update the log if a merge actually happened this turn
+        if (mergeValues.length > 0) {
+          state.magicLog = [...mergeValues].sort((a, b) => b - a);
+        }
+        // If mergeValues.length is 0, we do NOTHING, 
+        // leaving the old state.magicLog exactly as it was.
+      }
 
       const s1 = randomSpawn();
       if (s1 !== null) justSpawned.push(s1);
@@ -377,6 +391,9 @@
   const overlaySubEl = document.getElementById("overlaySub");
   const activeModsRow = document.getElementById("activeModsRow");
   const modalOverlay = document.getElementById("modalOverlay");
+  const magicLogEl = document.getElementById("magicLog");
+  const magicLogListEl = document.getElementById("magicLogList");
+  const overlayCloseBtn = document.getElementById("overlayClose");
 
   // static empty cell backgrounds, built once
   for (let i=0;i<16;i++){
@@ -602,6 +619,30 @@
 
     renderTiles(state.animationsEnabled);
     renderModChips();
+    renderMagicLog();
+  }
+
+  function renderMagicLog(){
+    magicLogEl.classList.toggle("show", !!state.mods.magician);
+    if (!state.mods.magician) return;
+
+    if (state.magicLog.length === 0){
+      magicLogListEl.innerHTML = `<p class="log-empty">No merges yet.</p>`;
+      return;
+    }
+
+    // Map through all merge values from the turn and style them like tiles
+    magicLogListEl.innerHTML = state.magicLog
+    .sort((a, b) => b - a)
+      .map(val => {
+        // Because 'val' is now the input (e.g., 4), 
+        // this index will point to the '4' tile's color/style
+        const idx = val >= 4096 ? 12 : Math.log2(val);
+        return `<span class="log-item" style="background: ${TILE_BG[idx]}; color: ${TILE_FG[idx]};">
+                  ${val}
+                </span>`;
+      })
+      .join("");
   }
 
   function renderModChips(){
@@ -685,6 +726,10 @@
 
   document.getElementById("newGameBtn").addEventListener("click", newGame);
   document.getElementById("overlayRestart").addEventListener("click", newGame);
+  overlayCloseBtn.addEventListener("click", hideOverlay);
+  overlayEl.addEventListener("click", (e) => {
+    if (e.target === overlayEl) hideOverlay();
+  });
   document.getElementById("resetModsBtn").addEventListener("click", () => {
     MODS.forEach(m => state.mods[m.key] = false);
     syncModCards();
@@ -724,33 +769,27 @@
   });
 
   // ---------- mods panel ----------
+  // Each mod is a square button showing a two-letter abbreviation.
+  // Clicking toggles the mod on/off; active mods tilt 10deg clockwise
+  // and brighten so it's clear at a glance which are selected.
   const modListEl = document.getElementById("modList");
-  const comboNoteEl = document.getElementById("comboNote");
+  const modDescPanelEl = document.getElementById("modDescPanel");
 
   MODS.forEach(m => {
-    const card = document.createElement("label");
-    card.className = "mod-card";
-    card.style.setProperty("--accent", m.accent);
-    card.dataset.key = m.key;
-    card.innerHTML = `
-      <span class="swatch"></span>
-      <span class="body">
-        <span class="row1">
-          <span class="name">${m.name}</span>
-          <span class="switch">
-            <input type="checkbox" data-key="${m.key}">
-            <span class="slider"></span>
-          </span>
-        </span>
-        <span class="desc">${m.desc}</span>
-      </span>
-    `;
-    modListEl.appendChild(card);
+    const square = document.createElement("button");
+    square.type = "button";
+    square.className = "mod-square";
+    square.style.setProperty("--accent", m.accent);
+    square.dataset.key = m.key;
+    square.setAttribute("aria-label", m.name);
+    square.innerHTML = `<span class="abbr">${m.abbr}</span>`;
+    modListEl.appendChild(square);
   });
 
-  modListEl.querySelectorAll('input[type="checkbox"]').forEach(input => {
-    input.addEventListener("change", () => {
-      state.mods[input.dataset.key] = input.checked;
+  modListEl.querySelectorAll(".mod-square").forEach(square => {
+    square.addEventListener("click", () => {
+      const key = square.dataset.key;
+      state.mods[key] = !state.mods[key];
       syncModCards();
       loadBestScore();
       newGame();
@@ -759,13 +798,21 @@
 
   function syncModCards(){
     MODS.forEach(m => {
-      const card = modListEl.querySelector(`.mod-card[data-key="${m.key}"]`);
-      const input = card.querySelector("input");
-      input.checked = state.mods[m.key];
-      card.classList.toggle("active", state.mods[m.key]);
+      const square = modListEl.querySelector(`.mod-square[data-key="${m.key}"]`);
+      square.classList.toggle("active", state.mods[m.key]);
     });
-    const activeCount = MODS.filter(m => state.mods[m.key]).length;
-    comboNoteEl.textContent = "funny mods lol";
+    renderModDescPanel();
+  }
+
+  function renderModDescPanel(){
+    const active = MODS.filter(m => state.mods[m.key]);
+    if (active.length === 0){
+      modDescPanelEl.innerHTML = `<p class="mod-desc-empty">Select a mod to see its description.</p>`;
+      return;
+    }
+    modDescPanelEl.innerHTML = active
+      .map(m => `<div class="mod-desc-item"><b>${m.name}:</b> ${m.desc}</div>`)
+      .join("");
   }
 
   // ---------- boot ----------
