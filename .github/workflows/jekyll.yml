@@ -3,7 +3,7 @@ name: Build and Deploy Jekyll Site
 on:
   push:
     branches:
-      - main # Change this to your default branch name if different
+      - main
 
 jobs:
   build:
@@ -15,8 +15,12 @@ jobs:
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: '3.0' # Adjust based on your Gemfile
+          ruby-version: '3.0'
           bundler-cache: true
+        # Add this line below to tell Ruby where your Gemfile is
+        working-directory: ./your-folder-name 
 
       - name: Build Jekyll Site
+        # Add this line below to tell Jekyll where your config file is
+        working-directory: ./your-folder-name
         run: bundle exec jekyll build
