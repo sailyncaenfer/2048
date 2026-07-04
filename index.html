@@ -26,13 +26,22 @@
       </div>
     </div>
     <div class="board-wrap" id="boardWrap">
+      <div class="magic-log" id="magicLog">
+        <h4>Merged Tiles</h4>
+        <div class="log-list" id="magicLogList">
+          <p class="log-empty">No merges yet.</p>
+        </div>
+      </div>
       <div class="board" id="cellGrid"></div>
       <div class="tiles-layer" id="tilesLayer"></div>
       <div class="overlay" id="overlay">
-        <h2 id="overlayTitle">Game Over</h2>
-        <p id="overlaySub">No more moves left on the board.</p>
-        <div class="buttons">
-          <button class="pill" id="overlayRestart">Try Again</button>
+        <div class="overlay-window">
+          <button class="overlay-close" id="overlayClose" type="button" aria-label="Close">&times;</button>
+          <h2 id="overlayTitle">Game Over</h2>
+          <p id="overlaySub">No more moves left on the board.</p>
+          <div class="buttons">
+            <button class="pill" id="overlayRestart">Try Again</button>
+          </div>
         </div>
       </div>
     </div>
@@ -61,8 +70,10 @@
         <section class="mods-section">
           <h3>Mods</h3>
           <!--<p class="sub">Toggle any combination. Changing a mod starts a fresh game.</p>-->
-          <div id="modList"></div>
-          <div class="panel-footer" id="comboNote"></div>
+          <div id="modList" class="mod-grid"></div>
+          <div class="mod-desc-panel" id="modDescPanel">
+            <p class="mod-desc-empty">Select a mod to see its description.</p>
+          </div>
         </section>
       </div>
     </div>
