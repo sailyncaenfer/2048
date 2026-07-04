@@ -21,6 +21,8 @@
       desc:"Two new tiles spawn after every move instead of one." },
     { key:"blocked",   name:"Blocked",   accent:"rgb(40,36,30)",
       desc:"An unmergeable tile is spawned at the start of the game." },
+    { key:"touch",     name:"Touch",     accent:"rgb(0,150,136)",
+      desc:"Tiles only merge if they were already touching, with no gap between them. Sliding two matching tiles together across an empty cell no longer merges them." },
   ];
 
   let nextTileId = 1;
@@ -32,7 +34,7 @@
     lastMergeValue:0,
     spawnLocs: [],
     animationsEnabled: true,
-    mods: { gravity:false, invisible:false, magician:false, volatile:false, blocked:false }
+    mods: { gravity:false, invisible:false, magician:false, volatile:false, blocked:false, touch:false }
   };
 
   function loadBestScore() {
@@ -166,21 +168,74 @@
     return BLOCKED;
   }
 
+  // "Touch" mod merge rule: two tiles merge only if their ORIGINAL columns
+  // were exactly one apart, i.e. nothing (not even an empty cell) separated
+  // them. Either or both tiles may still slide to meet in the middle; that
+  // doesn't disqualify the merge. A tile that already merged this move can't
+  // merge again (no chains). Ported from 2048_touch.c's merge_row_left().
+  function mergeRowTouchLeft(row, magicRow, mergeValues){
+    const newRow = [null, null, null, null];
+    const newMagic = [0, 0, 0, 0];
+    let writeIndex = 0;
+    let lastOrigCol = -2;   // original column of the tile now at newRow[writeIndex-1]
+    let lastMerged = false; // whether that tile already merged this move
+
+    for (let col=0; col<SIZE; col++){
+      const cell = row[col];
+      if (cell === null) continue;
+
+      const prev = writeIndex > 0 ? newRow[writeIndex-1] : null;
+      const prevMagic = writeIndex > 0 && state.mods.magician && newMagic[writeIndex-1] !== 0;
+      const curMagic = state.mods.magician && magicRow[col] !== 0;
+
+      if (prev !== null &&
+          !lastMerged &&
+          !prevMagic && !curMagic &&
+          prev.value === cell.value &&
+          (col - lastOrigCol === 1)){
+        // Same value, previous tile hasn't merged yet, and the two tiles
+        // were originally touching (no gap between them).
+        newRow[writeIndex-1] = { id: prev.id, value: prev.value * 2 };
+        state.score += newRow[writeIndex-1].value;
+        mergeValues.push(newRow[writeIndex-1].value);
+        lastMerged = true;
+        lastOrigCol = col;
+      } else {
+        newRow[writeIndex] = cell;
+        newMagic[writeIndex] = magicRow[col];
+        writeIndex += 1;
+        lastMerged = false;
+        lastOrigCol = col;
+      }
+    }
+
+    for (let i=0; i<SIZE; i++){
+      row[i] = newRow[i];
+      magicRow[i] = newMagic[i];
+    }
+  }
+
   function moveAndMergeOnce(direction){
-    const merged = emptyGrid(0);
     const mergeValues = [];
 
     rotateTimes(direction);
 
-    for (let row=0; row<SIZE; row++){
-      for (let col=0; col<SIZE; col++){
-        if (state.board[row][col] === null) continue;
-        let tempCol = col;
-        let ret;
-        do{
-          ret = moveTileLeft(row, tempCol, merged, mergeValues);
-          if (ret === MOVED) tempCol -= 1;
-        } while (ret === MOVED);
+    if (state.mods.touch){
+      for (let row=0; row<SIZE; row++){
+        mergeRowTouchLeft(state.board[row], state.magicCounter[row], mergeValues);
+      }
+    } else {
+      const merged = emptyGrid(0);
+      for (let row=0; row<SIZE; row++){
+        for (let col=0; col<SIZE; col++){
+          if (state.board[row][col] === null) continue;
+          let tempCol = col;
+          let ret;
+          do{
+            ret = moveTileLeft(row, tempCol, merged, mergeValues);
+            if (ret === MOVED) tempCol -= 1;
+          } while (ret === MOVED);
+        }
       }
     }
 
