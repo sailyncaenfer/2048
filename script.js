@@ -23,6 +23,8 @@
       desc:"An unmergeable tile is spawned at the start of the game." },
     { key:"touch",     name:"Touch",     abbr:"TC", accent:"rgb(0,150,136)",
       desc:"Only adjacent tiles can be merged." },
+    { key:"coinflip",  name:"Coin Flip", abbr:"CF", accent:"rgb(212,175,55)",
+      desc:"2's and 4's are equally likely to spawn." },
   ];
 
   let nextTileId = 1;
@@ -35,7 +37,7 @@
     spawnLocs: [],
     magicLog: [],   // history of merge values while Magician is active, newest first
     animationsEnabled: true,
-    mods: { gravity:false, invisible:false, magician:false, volatile:false, blocked:false, touch:false }
+    mods: { gravity:false, invisible:false, magician:false, volatile:false, blocked:false, touch:false, coinflip:false }
   };
 
   function loadBestScore() {
@@ -126,7 +128,7 @@
   function randomSpawn(){
     const cells = emptyCells();
     if (cells.length === 0) return null;
-    const val = Math.random() < 0.1 ? 4 : 2;
+    const val = Math.random() < (state.mods.coinflip ? 0.5 : 0.1) ? 4 : 2;
     const [r,c] = cells[Math.floor(Math.random()*cells.length)];
     state.board[r][c] = { id: nextTileId++, value: val };
     return r*SIZE + c;
