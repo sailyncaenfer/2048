@@ -625,6 +625,7 @@ button.pill.secondary:hover {
 
 .anim-section {
   margin-top: 22px;
+  margin-bottom: 22px;
 }
 
 .segmented {
@@ -734,6 +735,20 @@ button.pill.secondary:hover {
   font-style: italic;
 }
 
-#overlay {
-  display: none !important;
+.loss-flash {
+  position: fixed;
+  inset: 0;
+  background: rgb(250, 168, 159);
+  opacity: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.loss-flash.pulse {
+  animation: lossFlashPulse 1s ease-out forwards;
+}
+
+@keyframes lossFlashPulse {
+  0% { opacity: 1; }
+  100% { opacity: 0; }
 }

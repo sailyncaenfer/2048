@@ -1,101 +1,101 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
-  <title>2048 with like mods or smth</title>
-  <link rel="stylesheet" href="styles.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<title>2048 with like mods or smth</title>
+<link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div class="app">
-    <header class="title">
-      <button class="settings-btn" id="settingsBtn" type="button" aria-label="Open mods and settings">
-        <span class="gear">&#9881;</span> Mods &amp; Settings
-      </button>
-      <h1>2048 <span style="font-weight:400; font-size:0.55em; color:rgb(140,128,112);"></span></h1>
-      <p>2048 with like mods and stuff idk</p>
-    </header>
+<div class="loss-flash" id="lossFlash"></div>
+<div class="app">
+  <header class="title">
+    <button class="settings-btn" id="settingsBtn" type="button" aria-label="Open mods and settings">
+      <span class="gear">&#9881;</span> Mods &amp; Settings
+    </button>
+    <h1>2048 <span style="font-weight:400; font-size:0.55em; color:rgb(140,128,112);"></span></h1>
+    <p>2048 with like mods and stuff idk</p>
+  </header>
 
-    <div class="board-column">
-      <div class="hud">
-        <div class="active-mods" id="activeModsRow"></div>
-        <div class="scorebar">
-          <div class="score-box"><div class="label">Best</div><div class="value" id="bestVal">0</div></div>
-          <div class="score-box"><div class="label">Score</div><div class="value" id="scoreVal">0</div></div>
-          <div class="score-box"><div class="label">Moves</div><div class="value" id="movesVal">0</div></div>
-        </div>
+  <div class="board-column">
+    <div class="hud">
+      <div class="active-mods" id="activeModsRow"></div>
+      <div class="scorebar">
+        <div class="score-box"><div class="label">Best</div><div class="value" id="bestVal">0</div></div>
+        <div class="score-box"><div class="label">Score</div><div class="value" id="scoreVal">0</div></div>
+        <div class="score-box"><div class="label">Moves</div><div class="value" id="movesVal">0</div></div>
       </div>
-      <div class="board-area" id="boardArea">
-        <div class="board-wrap" id="boardWrap">
-          <div class="board" id="cellGrid"></div>
-          <div class="tiles-layer" id="tilesLayer"></div>
-          <div class="lockout-glow lockout-glow--left" id="lockoutGlowLeft"></div>
-          <div class="lockout-glow lockout-glow--right" id="lockoutGlowRight"></div>
-          <div class="lockout-glow lockout-glow--up" id="lockoutGlowUp"></div>
-          <div class="lockout-glow lockout-glow--down" id="lockoutGlowDown"></div>
-          <div class="tap-zone tap-zone--up" id="tapZoneUp"></div>
-          <div class="tap-zone tap-zone--down" id="tapZoneDown"></div>
-          <div class="tap-zone tap-zone--left" id="tapZoneLeft"></div>
-          <div class="tap-zone tap-zone--right" id="tapZoneRight"></div>
-          <div class="overlay" id="overlay">
-            <div class="overlay-window">
-              <button class="overlay-close" id="overlayClose" type="button" aria-label="Close">&times;</button>
-              <h2 id="overlayTitle">Game Over</h2>
-              <p id="overlaySub">No more moves left on the board.</p>
-              <div class="buttons">
-                <button class="pill" id="overlayRestart">Try Again</button>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="magic-log" id="magicLog">
-          <h4>Merged Tiles</h4>
-          <div class="log-list" id="magicLogList">
-            <p class="log-empty">No merges yet.</p>
-          </div>
-        </div>
-      </div>
-      <div class="toolbar">
-        <button class="pill" id="newGameBtn">New Game</button>
-        <button class="pill secondary" id="resetModsBtn">Clear Mods</button>
-      </div>
-      <p class="hint">Move with <kbd>&#8593;</kbd><kbd>&#8595;</kbd><kbd>&#8592;</kbd><kbd>&#8594;</kbd> or <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>. swipe on touch devices, or enable tap controls in Mods &amp; Settings to tap the board edges instead.</p>
     </div>
-
-    <div class="modal-overlay" id="modalOverlay">
-      <div class="modal" role="dialog" aria-modal="true" aria-label="Mods and settings">
-        <div class="modal-header">
-          <h2>Mods &amp; Settings</h2>
-          <button class="modal-close" id="modalClose" type="button" aria-label="Close">&times;</button>
+    <div class="board-wrap" id="boardWrap">
+      <div class="magic-log" id="magicLog">
+        <h4>Merged Tiles</h4>
+        <div class="log-list" id="magicLogList">
+          <p class="log-empty">No merges yet.</p>
         </div>
-        <div class="modal-body">
-          <section class="mods-section">
-            <h3>Mods</h3>
-            <div id="modList" class="mod-grid"></div>
-            <div class="mod-desc-panel" id="modDescPanel">
-              <p class="mod-desc-empty">Select a mod to see its description.</p>
-            </div>
-          </section>
-
-          <section class="anim-section">
-            <h3>Animation</h3>
-            <div class="segmented" id="animSegment">
-              <button class="seg-btn" data-val="on" type="button">Animated</button>
-              <button class="seg-btn" data-val="off" type="button">Instant</button>
-            </div>
-          </section>
-          <section class="anim-section">
-            <h3>Touch Controls</h3>
-            <div class="segmented" id="tapControlsSegment">
-              <button class="seg-btn" data-val="on" type="button">On</button>
-              <button class="seg-btn" data-val="off" type="button">Off</button>
-            </div>
-          </section>
+      </div>
+      <div class="board" id="cellGrid"></div>
+      <div class="tiles-layer" id="tilesLayer"></div>
+      <div class="lockout-glow lockout-glow--left" id="lockoutGlowLeft"></div>
+      <div class="lockout-glow lockout-glow--right" id="lockoutGlowRight"></div>
+      <div class="lockout-glow lockout-glow--up" id="lockoutGlowUp"></div>
+      <div class="lockout-glow lockout-glow--down" id="lockoutGlowDown"></div>
+      <div class="tap-zone tap-zone--up" id="tapZoneUp"></div>
+      <div class="tap-zone tap-zone--down" id="tapZoneDown"></div>
+      <div class="tap-zone tap-zone--left" id="tapZoneLeft"></div>
+      <div class="tap-zone tap-zone--right" id="tapZoneRight"></div>
+      <div class="overlay" id="overlay">
+        <div class="overlay-window">
+          <button class="overlay-close" id="overlayClose" type="button" aria-label="Close">&times;</button>
+          <h2 id="overlayTitle">Game Over</h2>
+          <p id="overlaySub">No more moves left on the board.</p>
+          <div class="buttons">
+            <button class="pill" id="overlayRestart">Try Again</button>
+          </div>
         </div>
       </div>
     </div>
-
-    <script src="script.js"></script>
+    <div class="toolbar">
+      <button class="pill" id="newGameBtn">New Game</button>
+      <button class="pill secondary" id="resetModsBtn">Clear Mods</button>
+    </div>
+    <p class="hint">Move with <kbd>&#8593;</kbd><kbd>&#8595;</kbd><kbd>&#8592;</kbd><kbd>&#8594;</kbd> or <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>. swipe on touch devices.</p>
   </div>
+
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal" role="dialog" aria-modal="true" aria-label="Mods and settings">
+      <div class="modal-header">
+        <h2>Mods &amp; Settings</h2>
+        <button class="modal-close" id="modalClose" type="button" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <section class="mods-section">
+          <h3>Mods</h3>
+          <div id="modList" class="mod-grid"></div>
+          <div class="mod-desc-panel" id="modDescPanel">
+            <p class="mod-desc-empty">Select a mod to see its description.</p>
+          </div>
+        </section>
+        
+        <section class="anim-section">
+          <h3>Animation</h3>
+          <div class="segmented" id="animSegment">
+            <button class="seg-btn" data-val="on" type="button">Animated</button>
+            <button class="seg-btn" data-val="off" type="button">Instant</button>
+          </div>
+        </section>
+
+        <section class="tap-controls-section">
+          <h3>Tap Controls</h3>
+          <div class="segmented" id="tapControlsSegment">
+            <button class="seg-btn" data-val="on" type="button">On</button>
+            <button class="seg-btn" data-val="off" type="button">Off</button>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</div>
 </body>
 </html>

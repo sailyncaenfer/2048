@@ -17,7 +17,7 @@
       desc:"Only newly spawned tiles are shown." },
     { key:"magician",  name:"Magician",  abbr:"MG", accent:"rgb(150,40,140)",
       desc:"Making the same merge twice spawns a temporary unmergeable block. Make unique merges to make it vanish." },
-    { key:"volatile",  name:"Volatile",  abbr:"VL", accent:"rgb(156,39,39)",
+    { key:"volatile",  name:"Volatile",  abbr:"VL", accent:"rgb(158, 40, 40)",
       desc:"Two new tiles spawn after every move instead of one." },
     { key:"blocked",   name:"Blocked",   abbr:"BL", accent:"rgb(40,36,30)",
       desc:"An unmergeable tile is spawned at the start of the game." },
@@ -25,7 +25,7 @@
       desc:"Only adjacent tiles can be merged." },
     { key:"coinflip",  name:"Coin Flip", abbr:"CF", accent:"rgb(212,175,55)",
       desc:"2's and 4's are equally likely to spawn." },
-    { key:"lockout",   name:"Lockout",   abbr:"LO", accent:"rgb(210,50,50)",
+    { key:"lockout",   name:"Lockout",   abbr:"LO", accent:"rgb(255, 79, 79)",
       desc:"A random direction is disabled every move." },
   ];
 
@@ -131,6 +131,7 @@
     pickLockout();
 
     hideOverlay();
+    lossFlashEl.classList.remove("pulse");
     stopAllMagicAnimations();
     tilesLayerEl.innerHTML = "";
     tileEls.clear();
@@ -423,6 +424,7 @@
       pickLockout();
     }
 
+    const wasGameOver = state.gameOver;
     if (isLost()){
       state.gameOver = true;
     }
@@ -430,7 +432,7 @@
     render();
 
     if (state.gameOver){
-      setTimeout(showOverlay, state.animationsEnabled ? 260 : 30);
+      if (!wasGameOver) triggerLossFlash();
     }
   }
 
@@ -449,6 +451,7 @@
   const magicLogListEl = document.getElementById("magicLogList");
   const overlayCloseBtn = document.getElementById("overlayClose");
   const boardWrapEl = document.getElementById("boardWrap");
+  const lossFlashEl = document.getElementById("lossFlash");
   const lockoutGlowEls = {
     [DIR.LEFT]:  document.getElementById("lockoutGlowLeft"),
     [DIR.RIGHT]: document.getElementById("lockoutGlowRight"),
@@ -749,6 +752,13 @@
     overlayEl.classList.add("show");
   }
   function hideOverlay(){ overlayEl.classList.remove("show"); }
+
+  function triggerLossFlash(){
+    // Restart the animation even if a previous pulse is still fading out.
+    lossFlashEl.classList.remove("pulse");
+    void lossFlashEl.offsetWidth; // force reflow
+    lossFlashEl.classList.add("pulse");
+  }
 
   // reposition tiles (no animation) if the layout size changes
   window.addEventListener("resize", () => renderTiles(false));
