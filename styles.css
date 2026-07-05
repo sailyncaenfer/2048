@@ -153,6 +153,10 @@
   }
   button.pill.secondary:hover{ background: rgba(120,101,79,0.08); }
 
+  .board-area{
+    position:relative;
+  }
+
   .board-wrap{
     position:relative;
     background: var(--border);
@@ -162,6 +166,41 @@
     width: 100%;
     touch-action: none;
     user-select:none;
+  }
+
+  /* Lockout mod: a soft red glow along the edge of the disabled
+     direction. Each side is its own element (not a shared ::after)
+     so that switching from one locked side to another crossfades:
+     the old side's opacity genuinely animates 1->0 while the new
+     side's opacity animates 0->1 at the same time. The fade duration
+     is driven by the --lockout-fade custom property, which script.js
+     sets to 0s when animations are turned off. */
+  .lockout-glow{
+    position:absolute;
+    inset:0;
+    border-radius:10px;
+    pointer-events:none;
+    opacity:0;
+    transition: opacity var(--lockout-fade, .15s) ease;
+    z-index: 4;
+    animation: lockoutPulse 1.4s ease-in-out infinite;
+  }
+  .lockout-glow--left{
+    background: linear-gradient(to right, rgba(224,44,44,0.65), rgba(224,44,44,0) 5%);
+  }
+  .lockout-glow--right{
+    background: linear-gradient(to left, rgba(224,44,44,0.65), rgba(224,44,44,0) 5%);
+  }
+  .lockout-glow--up{
+    background: linear-gradient(to bottom, rgba(224,44,44,0.65), rgba(224,44,44,0) 5%);
+  }
+  .lockout-glow--down{
+    background: linear-gradient(to top, rgba(224,44,44,0.65), rgba(224,44,44,0) 5%);
+  }
+  .lockout-glow.active{ opacity:1; }
+  @keyframes lockoutPulse{
+    0%, 100% { filter: brightness(1); }
+    50% { filter: brightness(1.35); }
   }
 
   .board{
@@ -298,18 +337,15 @@
   .overlay-window .buttons{ display:flex; gap:10px; }
 
   /* ---- Magician merge log ---- */
-  /* Lives inside #boardWrap so it can be anchored to the board itself.
-     On mobile it floats as a card just above the board (full width).
-     On wider screens it becomes a sidebar to the left of the board.
-     Only one offset edge is set in each case (never top+bottom), so
-     height stays auto - it grows/shrinks with the number of entries. */
+  /* Sibling of #boardWrap inside #boardArea. On thin/mobile screens it
+     sits in normal document flow right below the grid (full width),
+     so the layout reads: grid, merged tiles, toolbar, hint. On wider
+     screens it detaches into an absolutely positioned sidebar to the
+     left of the board instead (see media query below). */
   .magic-log{
     display:none;
-    position:absolute;
-    left:0;
-    right:0;
-    bottom:100%;
-    margin-bottom:14px;
+    width:100%;
+    margin-top:14px;
     background:#fff;
     border:1.5px solid rgb(200,187,168);
     border-radius:10px;
@@ -355,11 +391,10 @@
        auto - it grows with the number of merged-value entries, capped
        by max-height below. */
     .magic-log.show{
+      position:absolute;
       left: -190px;
-      right:auto;
-      bottom:auto;
       top: 0;
-      margin-bottom:0;
+      margin-top:0;
       width:170px;
       max-height:70vh;
     }
@@ -486,8 +521,9 @@
   .mod-grid {
     display: grid;
     /* Increase columns to fit more items, making each one narrower by default */
-    grid-template-columns: repeat(7, 1fr); 
-    gap: 5px; /* Set a consistent gap for both row and column */
+    grid-template-columns: repeat(4, 1fr); 
+    row-gap: 10px; /* Set a consistent gap for both row and column */
+    margin-top: 16px;
     margin-bottom: 16px;
   }
   .mod-square {

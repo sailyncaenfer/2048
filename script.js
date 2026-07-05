@@ -25,6 +25,8 @@
       desc:"Only adjacent tiles can be merged." },
     { key:"coinflip",  name:"Coin Flip", abbr:"CF", accent:"rgb(212,175,55)",
       desc:"2's and 4's are equally likely to spawn." },
+    { key:"lockout",   name:"Lockout",   abbr:"LO", accent:"rgb(210,50,50)",
+      desc:"A 9andom direction is disabled every move." },
   ];
 
   let nextTileId = 1;
@@ -37,7 +39,8 @@
     spawnLocs: [],
     magicLog: [],   // history of merge values while Magician is active, newest first
     animationsEnabled: true,
-    mods: { gravity:false, invisible:false, magician:false, volatile:false, blocked:false, touch:false, coinflip:false }
+    lockedDir: null, // direction disabled this turn while Lockout is active
+    mods: { gravity:false, invisible:false, magician:false, volatile:false, blocked:false, touch:false, coinflip:false, lockout:false }
   };
 
   function loadBestScore() {
@@ -111,12 +114,15 @@
     state.lastMergeValue = 0;
     state.spawnLocs = [];
     state.magicLog = [];
+    state.lockedDir = null;
 
     const s1 = randomSpawn();
     const s2 = randomSpawn();
     state.spawnLocs = [s1, s2].filter(x => x !== null);
 
     if (state.mods.blocked) randomSpawnBlock();
+
+    pickLockout();
 
     hideOverlay();
     stopAllMagicAnimations();
@@ -249,6 +255,43 @@
     return mergeValues;
   }
 
+  // ---------- lockout mechanics ----------
+  // Dry-runs a move on a scratch copy of the board to see whether it would
+  // change anything, without touching real game state (score included).
+  function wouldMoveChange(direction){
+    const savedBoard = state.board;
+    const savedMagic = state.magicCounter;
+    const savedScore = state.score;
+
+    state.board = cloneBoard(savedBoard);
+    state.magicCounter = savedMagic.map(row => row.slice());
+    const before = cloneBoard(state.board);
+    moveAndMergeOnce(direction);
+    const changed = !boardsEqual(before, state.board);
+
+    state.board = savedBoard;
+    state.magicCounter = savedMagic;
+    state.score = savedScore;
+    return changed;
+  }
+
+  // Picks a random direction to disable for the upcoming move. Never locks
+  // the player's only remaining legal move.
+  function pickLockout(){
+    if (!state.mods.lockout){ state.lockedDir = null; return; }
+
+    const allDirs = [DIR.LEFT, DIR.RIGHT, DIR.UP, DIR.DOWN];
+    const validDirs = allDirs.filter(d => wouldMoveChange(d));
+
+    let candidates = allDirs;
+    if (validDirs.length <= 1){
+      candidates = allDirs.filter(d => d !== validDirs[0]);
+    }
+
+    if (candidates.length === 0){ state.lockedDir = null; return; }
+    state.lockedDir = candidates[Math.floor(Math.random() * candidates.length)];
+  }
+
   // ---------- magician mechanics ----------
   function getHighestTile(){
     let highest = 0;
@@ -332,6 +375,7 @@
   function handleMove(direction){
     if (state.gameOver) return;
     if (modalOverlay.classList.contains("show")) return;
+    if (state.mods.lockout && state.lockedDir === direction) return;
 
     const before = cloneBoard(state.board);
     let mergeValues = moveAndMergeOnce(direction);
@@ -369,6 +413,8 @@
         state.best = state.score;
         try { localStorage.setItem(getBestScoreKey(), String(state.best)); } catch(e) {}
       }
+
+      pickLockout();
     }
 
     if (isLost()){
@@ -396,6 +442,13 @@
   const magicLogEl = document.getElementById("magicLog");
   const magicLogListEl = document.getElementById("magicLogList");
   const overlayCloseBtn = document.getElementById("overlayClose");
+  const boardWrapEl = document.getElementById("boardWrap");
+  const lockoutGlowEls = {
+    [DIR.LEFT]:  document.getElementById("lockoutGlowLeft"),
+    [DIR.RIGHT]: document.getElementById("lockoutGlowRight"),
+    [DIR.UP]:    document.getElementById("lockoutGlowUp"),
+    [DIR.DOWN]:  document.getElementById("lockoutGlowDown"),
+  };
 
   // static empty cell backgrounds, built once
   for (let i=0;i<16;i++){
@@ -622,6 +675,23 @@
     renderTiles(state.animationsEnabled);
     renderModChips();
     renderMagicLog();
+    renderLockoutGlow();
+  }
+
+  function renderLockoutGlow(){
+    // Duration is a CSS custom property so it can snap to 0 when
+    // animations are disabled, matching the rest of the game's instant mode.
+    boardWrapEl.style.setProperty(
+      "--lockout-fade",
+      state.animationsEnabled ? ".25s" : "0s"
+    );
+
+    const activeDir = (state.mods.lockout && state.lockedDir !== null) ? state.lockedDir : null;
+
+    for (const dir in lockoutGlowEls){
+      // Object keys from a computed-key literal are strings, so compare loosely.
+      lockoutGlowEls[dir].classList.toggle("active", activeDir !== null && Number(dir) === activeDir);
+    }
   }
 
   function renderMagicLog(){

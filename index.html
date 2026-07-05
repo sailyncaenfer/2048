@@ -25,23 +25,29 @@
         <div class="score-box"><div class="label">Moves</div><div class="value" id="movesVal">0</div></div>
       </div>
     </div>
-    <div class="board-wrap" id="boardWrap">
+    <div class="board-area" id="boardArea">
+      <div class="board-wrap" id="boardWrap">
+        <div class="board" id="cellGrid"></div>
+        <div class="tiles-layer" id="tilesLayer"></div>
+        <div class="lockout-glow lockout-glow--left" id="lockoutGlowLeft"></div>
+        <div class="lockout-glow lockout-glow--right" id="lockoutGlowRight"></div>
+        <div class="lockout-glow lockout-glow--up" id="lockoutGlowUp"></div>
+        <div class="lockout-glow lockout-glow--down" id="lockoutGlowDown"></div>
+        <div class="overlay" id="overlay">
+          <div class="overlay-window">
+            <button class="overlay-close" id="overlayClose" type="button" aria-label="Close">&times;</button>
+            <h2 id="overlayTitle">Game Over</h2>
+            <p id="overlaySub">No more moves left on the board.</p>
+            <div class="buttons">
+              <button class="pill" id="overlayRestart">Try Again</button>
+            </div>
+          </div>
+        </div>
+      </div>
       <div class="magic-log" id="magicLog">
         <h4>Merged Tiles</h4>
         <div class="log-list" id="magicLogList">
           <p class="log-empty">No merges yet.</p>
-        </div>
-      </div>
-      <div class="board" id="cellGrid"></div>
-      <div class="tiles-layer" id="tilesLayer"></div>
-      <div class="overlay" id="overlay">
-        <div class="overlay-window">
-          <button class="overlay-close" id="overlayClose" type="button" aria-label="Close">&times;</button>
-          <h2 id="overlayTitle">Game Over</h2>
-          <p id="overlaySub">No more moves left on the board.</p>
-          <div class="buttons">
-            <button class="pill" id="overlayRestart">Try Again</button>
-          </div>
         </div>
       </div>
     </div>
@@ -72,7 +78,7 @@
           <!--<p class="sub">Toggle any combination. Changing a mod starts a fresh game.</p>-->
           <div id="modList" class="mod-grid"></div>
           <div class="mod-desc-panel" id="modDescPanel">
-            <p class="mod-desc-empty">Select a mod to see its description.</p>
+            <p class="mod-desc-empty">funny mods lol</p>
           </div>
         </section>
       </div>
