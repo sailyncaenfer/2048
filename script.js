@@ -6,16 +6,19 @@
   const DIR = { LEFT:0, DOWN:1, RIGHT:2, UP:3 };
 
   const TILE_BG = ["var(--bg0)","var(--bg2)","var(--bg4)","var(--bg8)","var(--bg16)","var(--bg32)","var(--bg64)",
-                    "var(--bg128)","var(--bg256)","var(--bg512)","var(--bg1024)","var(--bg2048)","var(--bg4096)"];
-  const TILE_FG = ["var(--bg0)","var(--fg-dark)","var(--fg-dark)","var(--fg-light)","var(--fg-light)","var(--fg-light)",
-                    "var(--fg-light)","var(--fg-light)","var(--fg-light)","var(--fg-light)","var(--fg-light)","var(--fg-light)","var(--fg-light)"];
+                    "var(--bg128)","var(--bg256)","var(--bg512)","var(--bg1024)","var(--bg2048)","var(--bg4096)",
+                    "var(--bg8192)","var(--bg16384)","var(--bg32768)","var(--bg65536)","var(--bg131072)"];
+  const TILE_FG = ["var(--bg0)","var(--fg2)","var(--fg4)","var(--fg8)","var(--fg16)","var(--fg32)",
+                    "var(--fg64)","var(--fg128)","var(--fg256)","var(--fg512)","var(--fg1024)","var(--fg2048)","var(--fg4096)",
+                    "var(--fg8192)","var(--fg16384)","var(--fg32768)","var(--fg65536)","var(--fg131072)"];
+  const MAX_TILE_IDX = TILE_BG.length - 1; // 131072
 
   const MODS = [
     { key:"gravity",   name:"Gravity",   abbr:"GR", accent:"rgb(93,138,168)",
       desc:"Every move is performed twice." },
     { key:"invisible", name:"Invisible", abbr:"IV", accent:"rgb(150,140,140)",
       desc:"Only newly spawned tiles are shown." },
-    { key:"magician",  name:"Magician",  abbr:"MG", accent:"rgb(150,40,140)",
+    { key:"magician",  name:"Magician",  abbr:"MG", accent:"rgb(186, 50, 175)",
       desc:"Making the same merge twice spawns a temporary unmergeable block. Make unique merges to make it vanish." },
     { key:"volatile",  name:"Volatile",  abbr:"VL", accent:"rgb(158, 40, 40)",
       desc:"Two new tiles spawn after every move instead of one." },
@@ -40,6 +43,7 @@
     magicLog: [],   // history of merge values while Magician is active, newest first
     animationsEnabled: true,
     tapControlsEnabled: false,
+    theme: "light",
     lockedDir: null, // direction disabled this turn while Lockout is active
     mods: { gravity:false, invisible:false, magician:false, volatile:false, blocked:false, touch:false, coinflip:false, lockout:false }
   };
@@ -62,6 +66,16 @@
     const savedTapControls = localStorage.getItem("2048modlab_tapcontrols");
     if (savedTapControls === "on") state.tapControlsEnabled = true;
   } catch(e) {}
+
+  try {
+    const savedTheme = localStorage.getItem("2048modlab_theme");
+    if (savedTheme === "dark") state.theme = "dark";
+  } catch(e) {}
+
+  function applyTheme(){
+    document.documentElement.setAttribute("data-theme", state.theme);
+  }
+  applyTheme();
 
   // ---------- helpers ----------
 
@@ -576,7 +590,7 @@
       el.classList.add("block");
       el.textContent = "VERY ANNOYING BLOCK!";
     } else {
-      const idx = cellData.value >= 4096 ? 12 : Math.log2(cellData.value);
+      const idx = cellData.value >= 131072 ? MAX_TILE_IDX : Math.log2(cellData.value);
       el.style.background = TILE_BG[idx];
       el.style.color = TILE_FG[idx];
       el.textContent = String(cellData.value);
@@ -724,7 +738,7 @@
       .map(val => {
         // Because 'val' is now the input (e.g., 4), 
         // this index will point to the '4' tile's color/style
-        const idx = val >= 4096 ? 12 : Math.log2(val);
+        const idx = val >= 131072 ? MAX_TILE_IDX : Math.log2(val);
         return `<span class="log-item" style="background: ${TILE_BG[idx]}; color: ${TILE_FG[idx]};">
                   ${val}
                 </span>`;
@@ -846,6 +860,22 @@
     if (e.target === modalOverlay) closeModal();
   });
 
+  // ---------- modal tabs (Mods / Settings) ----------
+  const modalTabsEl = document.getElementById("modalTabs");
+  const tabPanels = document.querySelectorAll(".tab-panel");
+
+  modalTabsEl.querySelectorAll(".modal-tab-btn").forEach(tabBtn => {
+    tabBtn.addEventListener("click", () => {
+      const target = tabBtn.dataset.tab;
+      modalTabsEl.querySelectorAll(".modal-tab-btn").forEach(b => {
+        b.classList.toggle("active", b === tabBtn);
+      });
+      tabPanels.forEach(panel => {
+        panel.hidden = panel.dataset.panel !== target;
+      });
+    });
+  });
+
   // ---------- animation setting ----------
   const animSegment = document.getElementById("animSegment");
 
@@ -861,6 +891,24 @@
       state.animationsEnabled = btn.dataset.val === "on";
       syncAnimButtons();
       try { localStorage.setItem("2048modlab_anim", btn.dataset.val); } catch(e) {}
+    });
+  });
+
+  // ---------- theme setting ----------
+  const themeSegment = document.getElementById("themeSegment");
+
+  function syncThemeButtons(){
+    themeSegment.querySelectorAll(".seg-btn").forEach(btn => {
+      btn.classList.toggle("active", btn.dataset.val === state.theme);
+    });
+  }
+
+  themeSegment.querySelectorAll(".seg-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      state.theme = btn.dataset.val;
+      syncThemeButtons();
+      applyTheme();
+      try { localStorage.setItem("2048modlab_theme", state.theme); } catch(e) {}
     });
   });
 
@@ -952,6 +1000,7 @@
   // ---------- boot ----------
   syncModCards();
   syncAnimButtons();
+  syncThemeButtons();
   syncTapControlsButtons();
   syncTapZones();
   loadBestScore();
