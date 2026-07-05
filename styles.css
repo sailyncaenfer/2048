@@ -1,8 +1,52 @@
+/* ============================================================
+   THEME VARIABLES
+   Edit colors here to restyle the whole app. Each variable is
+   grouped by what it controls. The ":root[data-theme='dark']"
+   block below overrides the same variable names for dark mode —
+   add/change a color there and it flows through everywhere that
+   variable is used.
+   ============================================================ */
 :root {
-  --border: rgb(187, 173, 160);
-  --main-bg: rgb(250, 248, 239);
+  /* --- page background (gradient stops behind everything) --- */
+  --page-bg-1: #fbf7ee;
+  --page-bg-2: #efe6d6;
+  --page-bg-3: #e4d6bd;
+
+  /* --- surfaces (cards, modal, popovers) --- */
+  --main-bg: rgb(250, 248, 239);   /* modal / overlay / card background */
+  --surface-2: #fff;               /* inputs, buttons-on-cards, mod squares */
+  --border: rgb(187, 173, 160);    /* board background (the grid gap color) */
+
+  /* --- borders / dividers, light to strong --- */
+  --border-soft: rgb(224, 213, 196);   /* hairline dividers, panel borders */
+  --border-mid: rgb(200, 187, 168);    /* segmented control / magic-log borders */
+  --border-strong: rgb(190, 175, 155); /* button outlines, hover borders */
+  --border-kbd: rgb(210, 198, 182);    /* <kbd> key border */
+
+  /* --- text --- */
+  --ink: rgb(60, 54, 48);          /* main body text */
+  --heading: rgb(90, 80, 68);      /* h2/h3 headings, emphasized labels */
+  --title: rgb(64, 64, 64);        /* big "2048" title */
+  --subtitle: rgb(130, 118, 104);  /* small tagline under title */
+  --text-muted: rgb(140, 128, 112);  /* hints, sub-labels, inactive tabs */
+  --text-faint: rgb(150, 138, 122);  /* placeholder / empty-state text */
+  --text-faint-2: rgb(160, 148, 132); /* secondary empty-state text */
+  --text-body-2: rgb(110, 100, 90);   /* mod description body text */
+  --overlay-sub: rgb(120, 108, 96);   /* game-over subtitle text */
+
+  /* --- accent (brand brown used for buttons/links/active states) --- */
+  --accent-text: rgb(120, 101, 79);   /* accent-colored text/icons */
+  --accent-strong: rgb(143, 122, 97); /* solid accent button background */
+  --accent-tint: rgba(120, 101, 79, 0.08); /* faint hover background for accent-colored controls */
+
+  /* --- score HUD --- */
   --score-bg: rgb(187, 173, 160);
   --score-label: rgb(238, 228, 218);
+
+  /* --- misc tinting --- */
+  --cell-bg-tint: rgba(238, 228, 218, 0.35); /* empty board cell tint */
+
+  /* --- tile backgrounds --- */
   --bg0: rgb(205, 193, 180);
   --bg2: rgb(238, 228, 218);
   --bg4: rgb(237, 224, 200);
@@ -15,10 +59,118 @@
   --bg512: rgb(237, 200, 80);
   --bg1024: rgb(237, 197, 63);
   --bg2048: rgb(237, 194, 46);
-  --bg4096: rgb(60, 58, 50);
+  --bg4096: #d5b1d5;
+  --bg8192: #c58ec5;
+  --bg16384: #b46cb5;
+  --bg32768: #950093;
+  --bg65536: #750075;
+  --bg131072: #888edc;
   --fg-dark: rgb(119, 110, 101);
   --fg-light: rgb(249, 246, 242);
-  --ink: rgb(60, 54, 48);
+
+  /* --- tile text colors, themeable independently of background --- */
+  --fg2: var(--fg-dark);
+  --fg4: var(--fg-dark);
+  --fg8: var(--fg-light);
+  --fg16: var(--fg-light);
+  --fg32: var(--fg-light);
+  --fg64: var(--fg-light);
+  --fg128: var(--fg-light);
+  --fg256: var(--fg-light);
+  --fg512: var(--fg-light);
+  --fg1024: var(--fg-light);
+  --fg2048: var(--fg-light);
+  --fg4096: var(--fg-dark);
+  --fg8192: var(--fg-dark);
+  --fg16384: var(--fg-light);
+  --fg32768: var(--fg-light);
+  --fg65536: var(--fg-light);
+  --fg131072: var(--fg-light);
+}
+
+/* ============================================================
+   DARK THEME OVERRIDES
+   Same variable names as above — only the values change. Add a
+   new line here (matching a variable from the block above) to
+   theme anything that isn't overridden yet.
+   ============================================================ */
+:root[data-theme="dark"] {
+  /* --- page background --- */
+  --page-bg-1: #1c1a22;
+  --page-bg-2: #131218;
+  --page-bg-3: #0a090d;
+
+  /* --- surfaces --- */
+  --main-bg: rgb(30, 28, 36);
+  --surface-2: rgb(84, 82, 94);
+  --border: rgb(20, 19, 24);
+
+  /* --- borders / dividers --- */
+  --border-soft: rgb(55, 52, 64);
+  --border-mid: rgb(70, 66, 80);
+  --border-strong: rgb(90, 85, 102);
+  --border-kbd: rgb(70, 66, 80);
+
+  /* --- text --- */
+  --ink: rgb(230, 227, 235);
+  --heading: rgb(225, 220, 232);
+  --title: rgb(235, 232, 240);
+  --subtitle: rgb(160, 154, 172);
+  --text-muted: rgb(150, 144, 164);
+  --text-faint: rgb(120, 114, 134);
+  --text-faint-2: rgb(120, 114, 134);
+  --text-body-2: rgb(180, 175, 192);
+  --overlay-sub: rgb(180, 175, 192);
+
+  /* --- accent --- */
+  --accent-text: rgb(178, 156, 255);
+  --accent-strong: rgb(120, 92, 220);
+  --accent-tint: rgba(178, 156, 255, 0.12);
+
+  /* --- score HUD --- */
+  --score-bg: rgb(45, 42, 54);
+  --score-label: rgb(160, 154, 172);
+
+  /* --- misc tinting --- */
+  --cell-bg-tint: rgba(255, 255, 255, 0.04);
+
+  /* --- tile backgrounds --- */
+  --bg2: #043c24;
+  --bg4: #06643d;
+  --bg8: #1b955b;
+  --bg16: #20c175;
+  --bg32: #fc56a0;
+  --bg64: #e4317f;
+  --bg128: #9122ff;
+  --bg256: #8000ff;
+  --bg512: #6600cc;
+  --bg1024: #5500aa;
+  --bg2048: #45008a;
+  --bg4096: #005ec6;
+  --bg8192: #0079ff;
+  --bg16384: #00acff;
+  --bg32768: #47c5ff;
+  --bg65536: #47c5ff;
+  --bg131072: #47c5ff;
+
+  /* --- tile text colors --- */
+  --fg2: var(--fg-light);
+  --fg4: var(--fg-light);
+  --fg8: var(--fg-light);
+  --fg16: var(--fg-light);
+  --fg32: var(--fg-light);
+  --fg64: var(--fg-light);
+  --fg128: var(--fg-light);
+  --fg256: var(--fg-light);
+  --fg512: var(--fg-light);
+  --fg1024: var(--fg-light);
+  --fg2048: var(--fg-light);
+  --fg4096: var(--fg-light);
+  --fg8192: var(--fg-light);
+  --fg16384: var(--fg-light);
+  --fg32768: var(--fg-light);
+  --fg65536: var(--fg-light);
+  --fg131072: var(--fg-light);
 }
 
 * {
@@ -29,7 +181,7 @@
 body {
   margin: 0;
   min-height: 100vh;
-  background: radial-gradient(circle at 20% 10%, #fbf7ee 0%, #efe6d6 55%, #e4d6bd 100%);
+  background: radial-gradient(circle at 20% 10%, var(--page-bg-1) 0%, var(--page-bg-2) 55%, var(--page-bg-3) 100%);
   font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
   color: var(--ink);
   display: flex;
@@ -60,13 +212,13 @@ header.title h1 {
   font-size: clamp(34px, 6vw, 52px);
   letter-spacing: 0.5px;
   margin: 0 0 4px;
-  color: rgb(64, 64, 64);
+  color: var(--title);
 }
 
 header.title p {
   margin: 0;
   font-size: 14px;
-  color: rgb(130, 118, 104);
+  color: var(--subtitle);
   letter-spacing: 0.3px;
   text-align: center;
 }
@@ -76,9 +228,9 @@ header.title p {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  border: 1.5px solid rgb(190, 175, 155);
-  background: #fff;
-  color: rgb(120, 101, 79);
+  border: 1.5px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--accent-text);
   font-weight: 700;
   font-size: 12.5px;
   letter-spacing: 0.3px;
@@ -89,7 +241,7 @@ header.title p {
 }
 
 .settings-btn:hover {
-  background: rgba(120, 101, 79, 0.08);
+  background: var(--accent-tint);
   border-color: rgb(150, 132, 108);
 }
 
@@ -169,13 +321,13 @@ button.pill {
   font-weight: 700;
   font-size: 13px;
   letter-spacing: 0.3px;
-  background: rgb(143, 122, 97);
+  background: var(--accent-strong);
   color: #fff;
   transition: transform .08s ease, background .15s ease;
 }
 
 button.pill:hover {
-  background: rgb(120, 101, 79);
+  background: var(--accent-text);
 }
 
 button.pill:active {
@@ -184,12 +336,12 @@ button.pill:active {
 
 button.pill.secondary {
   background: transparent;
-  color: rgb(120, 101, 79);
-  border: 1.5px solid rgb(190, 175, 155);
+  color: var(--accent-text);
+  border: 1.5px solid var(--border-strong);
 }
 
 button.pill.secondary:hover {
-  background: rgba(120, 101, 79, 0.08);
+  background: var(--accent-tint);
 }
 
 .board-area {
@@ -311,7 +463,7 @@ button.pill.secondary:hover {
 }
 
 .cell-bg {
-  background: rgba(238, 228, 218, 0.35);
+  background: var(--cell-bg-tint);
   border-radius: 6px;
 }
 
@@ -391,7 +543,7 @@ button.pill.secondary:hover {
 
 .overlay-window {
   position: relative;
-  background: rgb(250, 248, 239);
+  background: var(--main-bg);
   border-radius: 14px;
   width: 100%;
   max-width: 320px;
@@ -419,7 +571,7 @@ button.pill.secondary:hover {
   background: transparent;
   font-size: 22px;
   line-height: 1;
-  color: rgb(140, 128, 112);
+  color: var(--text-muted);
   cursor: pointer;
   padding: 4px 9px;
   border-radius: 6px;
@@ -427,7 +579,7 @@ button.pill.secondary:hover {
 }
 
 .overlay-window .overlay-close:hover {
-  background: rgba(120, 101, 79, 0.08);
+  background: var(--accent-tint);
 }
 
 .overlay-window h2 {
@@ -435,12 +587,12 @@ button.pill.secondary:hover {
   font-family: inherit;
   font-weight: 700;
   font-size: 26px;
-  color: rgb(90, 80, 68);
+  color: var(--heading);
 }
 
 .overlay-window p {
   margin: 0;
-  color: rgb(120, 108, 96);
+  color: var(--overlay-sub);
   font-size: 14px;
   max-width: 280px;
 }
@@ -454,8 +606,8 @@ button.pill.secondary:hover {
   display: none;
   width: 100%;
   margin-top: 14px;
-  background: #fff;
-  border: 1.5px solid rgb(200, 187, 168);
+  background: var(--surface-2);
+  border: 1.5px solid var(--border-mid);
   border-radius: 10px;
   padding: 10px 12px;
   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
@@ -498,7 +650,7 @@ button.pill.secondary:hover {
 .magic-log .log-empty {
   margin: 0;
   font-size: 12px;
-  color: rgb(160, 148, 132);
+  color: var(--text-faint-2);
   font-style: italic;
 }
 
@@ -524,12 +676,12 @@ button.pill.secondary:hover {
 .hint {
   text-align: center;
   font-size: 12.5px;
-  color: rgb(140, 128, 112);
+  color: var(--text-muted);
 }
 
 .hint kbd {
-  background: #fff;
-  border: 1px solid rgb(210, 198, 182);
+  background: var(--surface-2);
+  border: 1px solid var(--border-kbd);
   border-radius: 4px;
   padding: 1px 6px;
   font-size: 11px;
@@ -555,7 +707,7 @@ button.pill.secondary:hover {
 }
 
 .modal {
-  background: rgb(250, 248, 239);
+  background: var(--main-bg);
   border-radius: 14px;
   width: 100%;
   max-width: 420px;
@@ -578,8 +730,8 @@ button.pill.secondary:hover {
   padding: 16px 18px 12px;
   position: sticky;
   top: 0;
-  background: rgb(250, 248, 239);
-  border-bottom: 1px solid rgb(224, 213, 196);
+  background: var(--main-bg);
+  border-bottom: 1px solid var(--border-soft);
 }
 
 .modal-header h2 {
@@ -587,7 +739,7 @@ button.pill.secondary:hover {
   font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
   font-size: 20px;
   font-weight: 700;
-  color: rgb(90, 80, 68);
+  color: var(--heading);
 }
 
 .modal-close {
@@ -595,7 +747,7 @@ button.pill.secondary:hover {
   background: transparent;
   font-size: 22px;
   line-height: 1;
-  color: rgb(140, 128, 112);
+  color: var(--text-muted);
   cursor: pointer;
   padding: 4px 9px;
   border-radius: 6px;
@@ -603,7 +755,45 @@ button.pill.secondary:hover {
 }
 
 .modal-close:hover {
-  background: rgba(120, 101, 79, 0.08);
+  background: var(--accent-tint);
+}
+
+.modal-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 12px 18px 0;
+  border-bottom: 1px solid var(--border-soft);
+  position: sticky;
+  top: 61px;
+  background: var(--main-bg);
+  z-index: 1;
+}
+
+.modal-tab-btn {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 9px 14px;
+  font-weight: 700;
+  font-size: 13.5px;
+  letter-spacing: 0.2px;
+  color: var(--text-muted);
+  border-bottom: 2.5px solid transparent;
+  transform: translateY(1px);
+  transition: color .15s ease, border-color .15s ease;
+}
+
+.modal-tab-btn:hover {
+  color: var(--accent-text);
+}
+
+.modal-tab-btn.active {
+  color: var(--accent-text);
+  border-bottom-color: var(--accent-strong);
+}
+
+.tab-panel[hidden] {
+  display: none;
 }
 
 .modal-body {
@@ -614,23 +804,35 @@ button.pill.secondary:hover {
   margin: 0 0 4px;
   font-size: 14px;
   letter-spacing: 0.2px;
-  color: rgb(90, 80, 68);
+  color: var(--heading);
 }
 
 .modal-body .sub {
   margin: 0 0 12px;
   font-size: 12.5px;
-  color: rgb(140, 128, 112);
+  color: var(--text-muted);
 }
 
-.anim-section {
+#resetModsBtn {
+  margin-top: 10px;
+}
+
+.mods-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.anim-section,
+.theme-section,
+.tap-controls-section {
   margin-top: 22px;
   margin-bottom: 22px;
 }
 
 .segmented {
   display: flex;
-  border: 1.5px solid rgb(200, 187, 168);
+  border: 1.5px solid var(--border-mid);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -638,26 +840,26 @@ button.pill.secondary:hover {
 .seg-btn {
   flex: 1;
   border: none;
-  background: #fff;
+  background: var(--surface-2);
   padding: 9px 10px;
   font-weight: 700;
   font-size: 13px;
-  color: rgb(120, 101, 79);
+  color: var(--accent-text);
   cursor: pointer;
   transition: background .15s ease, color .15s ease;
 }
 
 .seg-btn + .seg-btn {
-  border-left: 1.5px solid rgb(200, 187, 168);
+  border-left: 1.5px solid var(--border-mid);
 }
 
 .seg-btn.active {
-  background: rgb(143, 122, 97);
+  background: var(--accent-strong);
   color: #fff;
 }
 
 .seg-btn:hover:not(.active) {
-  background: rgba(120, 101, 79, 0.08);
+  background: var(--accent-tint);
 }
 
 .mod-grid {
@@ -673,9 +875,9 @@ button.pill.secondary:hover {
   height: 32px;
   margin: 0 auto;
   aspect-ratio: 1 / 1;
-  border: 2px solid rgb(224, 213, 196);
+  border: 2px solid var(--border-soft);
   border-radius: 4px;
-  background: #fff;
+  background: var(--surface-2);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -685,7 +887,7 @@ button.pill.secondary:hover {
 }
 
 .mod-square:hover {
-  border-color: rgb(190, 175, 155);
+  border-color: var(--border-strong);
 }
 
 .mod-square:active {
@@ -696,14 +898,14 @@ button.pill.secondary:hover {
   font-weight: 800;
   font-size: 12px;
   letter-spacing: 0.5px;
-  color: var(--accent, rgb(120, 101, 79));
+  color: var(--accent, var(--accent-text));
 }
 
 .mod-square.active {
   transform: rotate(10deg);
   filter: brightness(1.35);
-  border-color: var(--accent, rgb(190, 175, 155));
-  box-shadow: 0 0 4px 1px var(--accent, rgb(190, 175, 155));
+  border-color: var(--accent, var(--border-strong));
+  box-shadow: 0 0 4px 1px var(--accent, var(--border-strong));
 }
 
 .mod-square.active:active {
@@ -711,7 +913,7 @@ button.pill.secondary:hover {
 }
 
 .mod-desc-panel {
-  border-top: 1px solid rgb(224, 213, 196);
+  border-top: 1px solid var(--border-soft);
   padding-top: 12px;
   display: flex;
   flex-direction: column;
@@ -721,24 +923,24 @@ button.pill.secondary:hover {
 .mod-desc-item {
   font-size: 12.5px;
   line-height: 1.5;
-  color: rgb(110, 100, 90);
+  color: var(--text-body-2);
 }
 
 .mod-desc-item b {
-  color: rgb(90, 80, 68);
+  color: var(--heading);
 }
 
 .mod-desc-empty {
   margin: 0;
   font-size: 12px;
-  color: rgb(150, 138, 122);
+  color: var(--text-faint);
   font-style: italic;
 }
 
 .loss-flash {
   position: fixed;
   inset: 0;
-  background: rgb(250, 168, 159);
+  background: rgb(255, 0, 0);
   opacity: 0;
   z-index: -1;
   pointer-events: none;
@@ -749,6 +951,6 @@ button.pill.secondary:hover {
 }
 
 @keyframes lossFlashPulse {
-  0% { opacity: 1; }
+  0% { opacity: 0.35; }
   100% { opacity: 0; }
 }
