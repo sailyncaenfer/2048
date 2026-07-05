@@ -26,7 +26,7 @@
     { key:"coinflip",  name:"Coin Flip", abbr:"CF", accent:"rgb(212,175,55)",
       desc:"2's and 4's are equally likely to spawn." },
     { key:"lockout",   name:"Lockout",   abbr:"LO", accent:"rgb(210,50,50)",
-      desc:"A 9andom direction is disabled every move." },
+      desc:"A random direction is disabled every move." },
   ];
 
   let nextTileId = 1;
