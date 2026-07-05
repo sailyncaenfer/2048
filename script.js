@@ -17,7 +17,7 @@
       desc:"Only newly spawned tiles are shown." },
     { key:"magician",  name:"Magician",  abbr:"MG", accent:"rgb(150,40,140)",
       desc:"Making the same merge twice spawns a temporary unmergeable block. Make unique merges to make it vanish." },
-    { key:"volatile",  name:"Volatile",  abbr:"VL", accent:"rgb(196,39,39)",
+    { key:"volatile",  name:"Volatile",  abbr:"VL", accent:"rgb(156,39,39)",
       desc:"Two new tiles spawn after every move instead of one." },
     { key:"blocked",   name:"Blocked",   abbr:"BL", accent:"rgb(40,36,30)",
       desc:"An unmergeable tile is spawned at the start of the game." },
