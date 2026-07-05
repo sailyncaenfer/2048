@@ -39,6 +39,7 @@
     spawnLocs: [],
     magicLog: [],   // history of merge values while Magician is active, newest first
     animationsEnabled: true,
+    tapControlsEnabled: false,
     lockedDir: null, // direction disabled this turn while Lockout is active
     mods: { gravity:false, invisible:false, magician:false, volatile:false, blocked:false, touch:false, coinflip:false, lockout:false }
   };
@@ -55,6 +56,11 @@
   try {
     const savedAnim = localStorage.getItem("2048modlab_anim");
     if (savedAnim === "off") state.animationsEnabled = false;
+  } catch(e) {}
+
+  try {
+    const savedTapControls = localStorage.getItem("2048modlab_tapcontrols");
+    if (savedTapControls === "on") state.tapControlsEnabled = true;
   } catch(e) {}
 
   // ---------- helpers ----------
@@ -449,6 +455,12 @@
     [DIR.UP]:    document.getElementById("lockoutGlowUp"),
     [DIR.DOWN]:  document.getElementById("lockoutGlowDown"),
   };
+  const tapZoneEls = {
+    [DIR.UP]:    document.getElementById("tapZoneUp"),
+    [DIR.DOWN]:  document.getElementById("tapZoneDown"),
+    [DIR.LEFT]:  document.getElementById("tapZoneLeft"),
+    [DIR.RIGHT]: document.getElementById("tapZoneRight"),
+  };
 
   // static empty cell backgrounds, built once
   for (let i=0;i<16;i++){
@@ -764,12 +776,14 @@
   let touchStartX = 0, touchStartY = 0, touching = false;
 
   boardWrap.addEventListener("touchstart", (e) => {
+    if (state.tapControlsEnabled) return;
     touching = true;
     touchStartX = e.touches[0].clientX;
     touchStartY = e.touches[0].clientY;
   }, {passive:true});
 
   boardWrap.addEventListener("touchend", (e) => {
+    if (state.tapControlsEnabled) return;
     if (!touching) return;
     touching = false;
     const dx = e.changedTouches[0].clientX - touchStartX;
@@ -840,6 +854,44 @@
     });
   });
 
+  // ---------- touch controls setting ----------
+  const tapControlsSegment = document.getElementById("tapControlsSegment");
+
+  function syncTapControlsButtons(){
+    tapControlsSegment.querySelectorAll(".seg-btn").forEach(btn => {
+      const isOn = btn.dataset.val === "on";
+      btn.classList.toggle("active", isOn === state.tapControlsEnabled);
+    });
+  }
+
+  function syncTapZones(){
+    for (const dir in tapZoneEls){
+      tapZoneEls[dir].classList.toggle("enabled", state.tapControlsEnabled);
+    }
+  }
+
+  tapControlsSegment.querySelectorAll(".seg-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      state.tapControlsEnabled = btn.dataset.val === "on";
+      syncTapControlsButtons();
+      syncTapZones();
+      try { localStorage.setItem("2048modlab_tapcontrols", btn.dataset.val); } catch(e) {}
+    });
+  });
+
+  // Tapping/clicking an edge zone moves in that direction, same as a
+  // keypress or swipe. Use pointerdown (not click) so the move fires the
+  // instant the press begins rather than waiting for release. Object keys
+  // from the computed-key literal above are strings, so Number() them
+  // back into DIR values.
+  for (const dir in tapZoneEls){
+    tapZoneEls[dir].addEventListener("pointerdown", (e) => {
+      if (!state.tapControlsEnabled) return;
+      e.preventDefault();
+      handleMove(Number(dir));
+    });
+  }
+
   // ---------- mods panel ----------
   // Each mod is a square button showing a two-letter abbreviation.
   // Clicking toggles the mod on/off; active mods tilt 10deg clockwise
@@ -890,6 +942,8 @@
   // ---------- boot ----------
   syncModCards();
   syncAnimButtons();
+  syncTapControlsButtons();
+  syncTapZones();
   loadBestScore();
   newGame();
 })();
