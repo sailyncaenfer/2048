@@ -2,7 +2,7 @@
   "use strict";
 
   const SIZE = 4;
-  const GAP = 10; // must match the grid-gap used for .board in styles.css
+  const GAP = 10; // must match the grid-gap used for .board in style.css
   const DIR = { LEFT:0, DOWN:1, RIGHT:2, UP:3 };
 
   const TILE_BG = ["var(--bg0)","var(--bg2)","var(--bg4)","var(--bg8)","var(--bg16)","var(--bg32)","var(--bg64)",
@@ -16,20 +16,22 @@
   const MODS = [
     { key:"gravity",   name:"Gravity",   abbr:"GR", accent:"rgb(93,138,168)",
       desc:"Every move is performed twice." },
-    { key:"invisible", name:"Invisible", abbr:"IV", accent:"rgb(150,140,140)",
-      desc:"Only newly spawned tiles are shown." },
-    { key:"magician",  name:"Magician",  abbr:"MG", accent:"rgb(186, 50, 175)",
-      desc:"Making the same merge twice spawns a temporary unmergeable block. Make unique merges to make it vanish." },
-    { key:"volatile",  name:"Volatile",  abbr:"VL", accent:"rgb(158, 40, 40)",
-      desc:"Two new tiles spawn after every move instead of one." },
-    { key:"blocked",   name:"Blocked",   abbr:"BL", accent:"rgb(40,36,30)",
-      desc:"An unmergeable tile is spawned at the start of the game." },
     { key:"touch",     name:"Touch",     abbr:"TC", accent:"rgb(0,150,136)",
       desc:"Only adjacent tiles can be merged." },
+    { key:"blocked",   name:"Blocked",   abbr:"BL", accent:"rgb(40,36,30)",
+      desc:"An unmergeable tile is spawned at the start of the game." },
+    { key:"invisible", name:"Invisible", abbr:"IV", accent:"rgb(150,140,140)",
+      desc:"Only newly spawned tiles are shown." },
     { key:"coinflip",  name:"Coin Flip", abbr:"CF", accent:"rgb(212,175,55)",
       desc:"2's and 4's are equally likely to spawn." },
+    { key:"volatile",  name:"Volatile",  abbr:"VL", accent:"rgb(158, 40, 40)",
+      desc:"Two new tiles spawn after every move instead of one." },
+    { key:"extrovert", name:"Extrovert", abbr:"XT", accent:"rgb(255, 140, 66)",
+      desc:"If the biggest tile sits in the same spot for 7 moves, it swaps with the tile in a fixed spot toward the center. In Chaos Mode this tracking always runs in the background, even while Extrovert isn't the active mod." },
     { key:"lockout",   name:"Lockout",   abbr:"LO", accent:"rgb(255, 79, 79)",
       desc:"A random direction is disabled every move." },
+    { key:"magician",  name:"Magician",  abbr:"MG", accent:"rgb(186, 50, 175)",
+      desc:"Making the same merge twice spawns a temporary unmergeable block. Make unique merges to make it vanish." },
   ];
 
   let nextTileId = 1;
@@ -45,9 +47,10 @@
     tapControlsEnabled: false,
     theme: "light",
     lockedDir: null, // direction disabled this turn while Lockout is active
-    mods: { gravity:false, invisible:false, magician:false, volatile:false, blocked:false, touch:false, coinflip:false, lockout:false },
+    mods: { gravity:false, invisible:false, magician:false, volatile:false, blocked:false, touch:false, coinflip:false, lockout:false, extrovert:false },
     chaosMode: false,     // true once the "chaos" cheat code has been typed in the mods menu
-    chaosActiveMod: null  // key of the single mod Chaos Mode currently has switched on
+    chaosActiveMod: null, // key of the single mod Chaos Mode currently has switched on
+    extrovertTracker: {}  // tile id -> { row, col, streak } for Extrovert's "stayed put" tracking
   };
 
   function loadBestScore() {
@@ -149,6 +152,7 @@
     state.spawnLocs = [];
     state.magicLog = [];
     state.lockedDir = null;
+    state.extrovertTracker = {};
 
     const s1 = randomSpawn();
     const s2 = randomSpawn();
@@ -342,6 +346,112 @@
     state.lockedDir = candidates[Math.floor(Math.random() * candidates.length)];
   }
 
+  // ---------- extrovert mechanics ----------
+  // Every cell has a fixed "home" cell it teleports to. The four center
+  // cells are everyone's ultimate home and map to themselves; the twelve
+  // outer cells each belong to one of the four corner "cliques" (the corner
+  // plus its two orthogonal neighbors) and map to the center cell on the
+  // opposite side of the board, mirrored through the middle.
+  const EXTROVERT_TARGET = [
+    [[2,2],[2,2],[2,1],[2,1]],
+    [[2,2],[1,1],[1,2],[2,1]],
+    [[1,2],[2,1],[2,2],[1,1]],
+    [[1,2],[1,2],[1,1],[1,1]]
+  ];
+  const EXTROVERT_STREAK_NEEDED = 8;
+
+  // Extrovert's position tracking runs whenever the mod itself is on, and
+  // also passively throughout all of Chaos Mode (per its own special rule),
+  // even on moves where some other mod is the one currently switched on.
+  function extrovertIsTracking(){
+    return state.mods.extrovert || state.chaosMode;
+  }
+
+  // Briefly rings the given cell to call out a teleport swap.
+  function spawnExtrovertGlow(r, c){
+    const total = tilesLayerEl.clientWidth || tilesLayerEl.offsetWidth || 0;
+    const cell = Math.max(0, (total - GAP*(SIZE-1)) / SIZE);
+    const x = c*(cell+GAP), y = r*(cell+GAP);
+
+    const glow = document.createElement("div");
+    glow.className = "extrovert-glow";
+    glow.style.width = cell + "px";
+    glow.style.height = cell + "px";
+    glow.style.transform = `translate(${x}px, ${y}px)`;
+    tilesLayerEl.appendChild(glow);
+    setTimeout(() => glow.remove(), 650);
+  }
+
+  // Called once per successful move. Finds whichever tile(s) currently hold
+  // the board's highest value, tracks how many moves in a row each has sat
+  // in the same cell, and teleport-swaps any that have overstayed their
+  // welcome (7+ moves) with the tile at their fixed home cell.
+  function processExtrovert(){
+    if (!extrovertIsTracking()){
+      state.extrovertTracker = {};
+      return;
+    }
+
+    let maxVal = 0;
+    for (let r=0;r<SIZE;r++){
+      for (let c=0;c<SIZE;c++){
+        const cell = state.board[r][c];
+        if (cell && cell.value > 1 && cell.value > maxVal) maxVal = cell.value;
+      }
+    }
+    if (maxVal === 0) return;
+
+    const stillHolding = new Set();
+
+    for (let r=0;r<SIZE;r++){
+      for (let c=0;c<SIZE;c++){
+        // --- ADD THIS CHECK ---
+        // Skip tracking if the tile is in one of the center cells:
+        // (1,1), (1,2), (2,1), or (2,2)
+        if ((r === 1 || r === 2) && (c === 1 || c === 2)) continue;
+        // ----------------------
+
+        const cell = state.board[r][c];
+        if (!cell || cell.value !== maxVal) continue;
+
+        const id = cell.id;
+        stillHolding.add(id);
+        const prev = state.extrovertTracker[id];
+
+        if (prev && prev.row === r && prev.col === c){
+          prev.streak += 1;
+          prev.value = maxVal;
+        } else {
+          state.extrovertTracker[id] = { row:r, col:c, streak:1, value:maxVal };
+        }
+
+        if (state.extrovertTracker[id].streak >= EXTROVERT_STREAK_NEEDED){
+          const [tr, tc] = EXTROVERT_TARGET[r][c];
+          delete state.extrovertTracker[id];
+
+          if (tr !== r || tc !== c){
+            const other = state.board[tr][tc];
+            state.board[r][c] = other;
+            state.board[tr][tc] = cell;
+
+            const tmpMagic = state.magicCounter[r][c];
+            state.magicCounter[r][c] = state.magicCounter[tr][tc];
+            state.magicCounter[tr][tc] = tmpMagic;
+
+            if (other) delete state.extrovertTracker[other.id];
+
+            spawnExtrovertGlow(r, c);
+            spawnExtrovertGlow(tr, tc);
+          }
+        }
+      }
+    }
+
+    for (const idKey in state.extrovertTracker){
+      if (!stillHolding.has(Number(idKey))) delete state.extrovertTracker[idKey];
+    }
+  }
+
   // ---------- chaos mode ----------
   // Picks a mod key other than the one passed in.
   function chaosPickDifferentMod(excludeKey){
@@ -530,6 +640,7 @@
         try { localStorage.setItem(getBestScoreKey(), String(state.best)); } catch(e) {}
       }
 
+      processExtrovert();
       pickLockout();
     }
 
@@ -558,6 +669,8 @@
   const modalOverlay = document.getElementById("modalOverlay");
   const magicLogEl = document.getElementById("magicLog");
   const magicLogListEl = document.getElementById("magicLogList");
+  const extrovertLogEl = document.getElementById("extrovertLog");
+  const extrovertLogListEl = document.getElementById("extrovertLogList");
   const overlayCloseBtn = document.getElementById("overlayClose");
   const boardWrapEl = document.getElementById("boardWrap");
   const lossFlashEl = document.getElementById("lossFlash");
@@ -799,6 +912,7 @@
     renderTiles(state.animationsEnabled);
     renderModChips();
     renderMagicLog();
+    renderExtrovertLog();
     renderLockoutGlow();
   }
 
@@ -816,6 +930,42 @@
       // Object keys from a computed-key literal are strings, so compare loosely.
       lockoutGlowEls[dir].classList.toggle("active", activeDir !== null && Number(dir) === activeDir);
     }
+  }
+
+  // Shows every currently-tracked biggest tile, its cell, and how many more
+  // moves it can sit still before Extrovert teleports it home. Visible
+  // whenever tracking is actually happening (mod on, or passively during
+  // Chaos Mode), same condition processExtrovert() uses.
+  function renderExtrovertLog(){
+    const active = extrovertIsTracking();
+    extrovertLogEl.classList.toggle("show", active);
+    if (!active) return;
+
+    const entries = Object.values(state.extrovertTracker);
+    if (entries.length === 0){
+      extrovertLogListEl.innerHTML = `<p class="log-empty">Tracking the largest tile&hellip;</p>`;
+      return;
+    }
+
+    // Inside renderExtrovertLog function
+    extrovertLogListEl.innerHTML = entries
+      .sort((a, b) => b.streak - a.streak)
+      .map(entry => {
+        const remaining = Math.max(0, EXTROVERT_STREAK_NEEDED - entry.streak);
+        const rowLabel = entry.row + 1, colLabel = entry.col + 1;
+        const countText = remaining === 0 ? "next move!" : `${remaining} move${remaining === 1 ? "" : "s"}`;
+        
+        // Add logic to get the correct colors based on the tile value
+        const idx = entry.value >= 131072 ? MAX_TILE_IDX : Math.log2(entry.value);
+        const style = `background: ${TILE_BG[idx]}; color: ${TILE_FG[idx]};`;
+
+        return `<div class="extrovert-item" style="${style}">
+                  <span class="ext-value">${entry.value}</span>
+                  <span class="ext-loc">R${rowLabel}C${colLabel}</span>
+                  <span class="ext-count">${countText}</span>
+                </div>`;
+      })
+      .join("");
   }
 
   function renderMagicLog(){
