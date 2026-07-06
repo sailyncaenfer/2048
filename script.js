@@ -770,8 +770,15 @@
     anim.raf = requestAnimationFrame(frame);
   }
 
+  function getFontSizeClass(value) {
+    if (value < 1000) return "tile-size-small";    // 1-3 digits
+    if (value < 10000) return "tile-size-medium";  // 4 digits
+    if (value < 100000) return "tile-size-large";  // 5 digits
+    return "tile-size-huge";                       // 6+ digits
+  }
+
   function styleTileContent(el, cellData, isMagic, magicVal){
-    el.classList.remove("block", "magic");
+    el.classList.remove("block", "magic", "tile-size-small", "tile-size-medium", "tile-size-large", "tile-size-huge");
     el.style.background = "";
     el.style.color = "";
 
@@ -809,6 +816,9 @@
       el.style.background = TILE_BG[idx];
       el.style.color = TILE_FG[idx];
       el.textContent = String(cellData.value);
+      
+      // ADD THIS LINE
+      el.classList.add(getFontSizeClass(cellData.value));
     }
   }
 
