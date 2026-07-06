@@ -13,7 +13,7 @@
     <button class="settings-btn" id="settingsBtn" type="button" aria-label="Open mods and settings">
       <span class="gear">&#9881;</span> Mods &amp; Settings
     </button>
-    <h1>2048 <span style="font-weight:400; font-size:0.55em; color:rgb(140,128,112);"></span></h1>
+    <h1 id="titleH1">2048 <span style="font-weight:400; font-size:0.55em; color:rgb(140,128,112);"></span></h1>
     <p>2048 with like mods and stuff idk</p>
   </header>
 
@@ -27,6 +27,18 @@
       </div>
     </div>
     <div class="board-wrap" id="boardWrap">
+      <div class="board-square" id="boardSquare">
+        <div class="board" id="cellGrid"></div>
+        <div class="tiles-layer" id="tilesLayer"></div>
+        <div class="lockout-glow lockout-glow--left" id="lockoutGlowLeft"></div>
+        <div class="lockout-glow lockout-glow--right" id="lockoutGlowRight"></div>
+        <div class="lockout-glow lockout-glow--up" id="lockoutGlowUp"></div>
+        <div class="lockout-glow lockout-glow--down" id="lockoutGlowDown"></div>
+        <div class="tap-zone tap-zone--up" id="tapZoneUp"></div>
+        <div class="tap-zone tap-zone--down" id="tapZoneDown"></div>
+        <div class="tap-zone tap-zone--left" id="tapZoneLeft"></div>
+        <div class="tap-zone tap-zone--right" id="tapZoneRight"></div>
+      </div>
       <div class="magic-log" id="magicLog">
         <h4>Merged Tiles</h4>
         <div class="log-list" id="magicLogList">
@@ -39,16 +51,6 @@
           <p class="log-empty">Tracking the largest tile&hellip;</p>
         </div>
       </div>
-      <div class="board" id="cellGrid"></div>
-      <div class="tiles-layer" id="tilesLayer"></div>
-      <div class="lockout-glow lockout-glow--left" id="lockoutGlowLeft"></div>
-      <div class="lockout-glow lockout-glow--right" id="lockoutGlowRight"></div>
-      <div class="lockout-glow lockout-glow--up" id="lockoutGlowUp"></div>
-      <div class="lockout-glow lockout-glow--down" id="lockoutGlowDown"></div>
-      <div class="tap-zone tap-zone--up" id="tapZoneUp"></div>
-      <div class="tap-zone tap-zone--down" id="tapZoneDown"></div>
-      <div class="tap-zone tap-zone--left" id="tapZoneLeft"></div>
-      <div class="tap-zone tap-zone--right" id="tapZoneRight"></div>
       <div class="overlay" id="overlay">
         <div class="overlay-window">
           <button class="overlay-close" id="overlayClose" type="button" aria-label="Close">&times;</button>

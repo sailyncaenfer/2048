@@ -1165,6 +1165,30 @@
     }
   });
 
+  // ---------- chaos mode title tap toggle ----------
+  // Tapping/clicking the "2048" title 5 times within 2 seconds toggles
+  // Chaos Mode, same effect as the "chaos" keyboard cheat code above.
+  // Uses a plain "click" listener (fires for touch taps and mouse clicks
+  // alike) rather than the Pointer Events API.
+  const titleH1 = document.getElementById("titleH1");
+  let titleTapCount = 0;
+  let titleTapResetTimer = null;
+
+  titleH1.addEventListener("click", () => {
+    titleTapCount += 1;
+
+    clearTimeout(titleTapResetTimer);
+    titleTapResetTimer = setTimeout(() => {
+      titleTapCount = 0;
+    }, 2000);
+
+    if (titleTapCount >= 5){
+      titleTapCount = 0;
+      clearTimeout(titleTapResetTimer);
+      setChaosMode(!state.chaosMode);
+    }
+  });
+
   // ---------- modal tabs (Mods / Settings) ----------
   const modalTabsEl = document.getElementById("modalTabs");
   const tabPanels = document.querySelectorAll(".tab-panel");

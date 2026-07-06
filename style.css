@@ -367,6 +367,16 @@ button.pill.secondary.active {
 
 .board-wrap {
   position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  touch-action: none;
+  user-select: none;
+}
+
+.board-square {
+  position: relative;
   background: var(--border);
   border-radius: 10px;
   padding: 12px;
@@ -639,7 +649,6 @@ button.pill.secondary.active {
 .magic-log {
   display: none;
   width: 100%;
-  margin-top: 14px;
   background: var(--surface-2);
   border: 1.5px solid var(--border-mid);
   border-radius: 10px;
@@ -710,7 +719,6 @@ button.pill.secondary.active {
 .extrovert-log {
   display: none;
   width: 100%;
-  margin-top: 14px;
   background: var(--surface-2);
   border: 1.5px solid var(--border-mid);
   border-radius: 10px;
