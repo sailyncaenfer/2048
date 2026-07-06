@@ -82,6 +82,8 @@
   // ---------- helpers ----------
 
   function getBestScoreKey() {
+    if (state.chaosMode) return "2048modlab_best_chaos";
+
     const active = MODS
     .filter(mod => state.mods[mod.key])
     .map(mod => mod.key)
