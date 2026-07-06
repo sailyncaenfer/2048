@@ -45,7 +45,9 @@
     tapControlsEnabled: false,
     theme: "light",
     lockedDir: null, // direction disabled this turn while Lockout is active
-    mods: { gravity:false, invisible:false, magician:false, volatile:false, blocked:false, touch:false, coinflip:false, lockout:false }
+    mods: { gravity:false, invisible:false, magician:false, volatile:false, blocked:false, touch:false, coinflip:false, lockout:false },
+    chaosMode: false,     // true once the "chaos" cheat code has been typed in the mods menu
+    chaosActiveMod: null  // key of the single mod Chaos Mode currently has switched on
   };
 
   function loadBestScore() {
@@ -126,6 +128,16 @@
 
   // ---------- game setup ----------
   function newGame(){
+    if (state.chaosMode){
+      if (state.chaosActiveMod === "blocked") removeBlockedTiles();
+      if (state.chaosActiveMod === "magician") removeMagicTiles();
+      if (state.chaosActiveMod) state.mods[state.chaosActiveMod] = false;
+
+      const key = chaosPickDifferentMod(state.chaosActiveMod);
+      state.mods[key] = true;
+      state.chaosActiveMod = key;
+    }
+
     state.board = emptyGrid(null);
     state.magicCounter = emptyGrid(0);
     state.score = 0;
@@ -163,9 +175,24 @@
 
   function randomSpawnBlock(){
     const cells = emptyCells();
-    if (cells.length === 0) return;
+    if (cells.length === 0) return null;
     const [r,c] = cells[Math.floor(Math.random()*cells.length)];
     state.board[r][c] = { id: nextTileId++, value: 1 }; // sentinel: permanent obstacle tile
+    return r*SIZE + c;
+  }
+
+  // Clears every obstacle tile (the Blocked mod's sentinel value) off the
+  // board. Used when Chaos Mode switches away from Blocked, since those
+  // tiles are only meant to exist while Blocked is the active mod.
+  function removeBlockedTiles(){
+    for (let r=0;r<SIZE;r++){
+      for (let c=0;c<SIZE;c++){
+        if (state.board[r][c] && state.board[r][c].value === 1){
+          state.board[r][c] = null;
+          state.magicCounter[r][c] = 0;
+        }
+      }
+    }
   }
 
   // ---------- move + merge ----------
@@ -313,6 +340,49 @@
     state.lockedDir = candidates[Math.floor(Math.random() * candidates.length)];
   }
 
+  // ---------- chaos mode ----------
+  // Picks a mod key other than the one passed in.
+  function chaosPickDifferentMod(excludeKey){
+    const candidates = MODS.map(m => m.key).filter(k => k !== excludeKey);
+    return candidates[Math.floor(Math.random() * candidates.length)];
+  }
+
+  // Turns Chaos Mode on (picking one random starting mod) or off (dropping
+  // whatever mod it currently has active). Always starts a fresh game after,
+  // same as toggling a mod square by hand.
+  function setChaosMode(on){
+    state.chaosMode = on;
+    MODS.forEach(m => state.mods[m.key] = false);
+    state.chaosActiveMod = null;
+
+    loadBestScore();
+    newGame();       // newGame() picks the starting mod itself when chaosMode is true
+    syncModCards();  // sync AFTER, so the menu reflects whatever newGame() landed on
+  }
+
+  // Called once per successful move while Chaos Mode is active. 10% chance
+  // to swap the currently active mod out for a different random one.
+  // Returns true if the swap just turned Blocked on, so the caller can spawn
+  // an obstacle tile in place of this move's natural spawn.
+  function maybeChaosSwitch(){
+    if (!state.chaosMode) return false;
+    if (Math.random() >= 0.10) return false;
+
+    const oldKey = state.chaosActiveMod;
+    const newKey = chaosPickDifferentMod(oldKey);
+
+    if (oldKey){
+      state.mods[oldKey] = false;
+      if (oldKey === "blocked") removeBlockedTiles();
+      if (oldKey === "magician") removeMagicTiles();
+    }
+
+    state.mods[newKey] = true;
+    state.chaosActiveMod = newKey;
+
+    return newKey === "blocked";
+  }
+
   // ---------- magician mechanics ----------
   function getHighestTile(){
     let highest = 0;
@@ -337,6 +407,20 @@
     const highest = getHighestTile();
     state.board[r][c] = { id: nextTileId++, value: -1 }; // magic sentinel
     state.magicCounter[r][c] = magicCounterValue(highest);
+  }
+
+  // Clears every magic (TV-static) sentinel tile off the board. Used when
+  // Chaos Mode switches away from Magician, since those tiles only make
+  // sense while Magician is the active mod.
+  function removeMagicTiles(){
+    for (let r=0;r<SIZE;r++){
+      for (let c=0;c<SIZE;c++){
+        if (state.magicCounter[r][c] !== 0){
+          state.board[r][c] = null;
+          state.magicCounter[r][c] = 0;
+        }
+      }
+    }
   }
 
   function processMagic(mergeValues){
@@ -421,11 +505,20 @@
         // leaving the old state.magicLog exactly as it was.
       }
 
-      const s1 = randomSpawn();
-      if (s1 !== null) justSpawned.push(s1);
-      if (state.mods.volatile){
-        const s2 = randomSpawn();
-        if (s2 !== null) justSpawned.push(s2);
+      const chaosSwitchedToBlocked = state.chaosMode ? maybeChaosSwitch() : false;
+
+      if (chaosSwitchedToBlocked){
+        // Blocked just got dealt in by Chaos Mode: its obstacle tile takes
+        // priority over the normal random spawn this move.
+        const sB = randomSpawnBlock();
+        if (sB !== null) justSpawned.push(sB);
+      } else {
+        const s1 = randomSpawn();
+        if (s1 !== null) justSpawned.push(s1);
+        if (state.mods.volatile){
+          const s2 = randomSpawn();
+          if (s2 !== null) justSpawned.push(s2);
+        }
       }
       state.spawnLocs = justSpawned;
 
@@ -748,6 +841,12 @@
 
   function renderModChips(){
     activeModsRow.innerHTML = "";
+    if (state.chaosMode){
+      const chaosChip = document.createElement("span");
+      chaosChip.className = "mod-chip chaos-chip";
+      chaosChip.textContent = "Chaos Mode";
+      activeModsRow.appendChild(chaosChip);
+    }
     MODS.forEach(m => {
       if (!state.mods[m.key]) return;
       const chip = document.createElement("span");
@@ -841,6 +940,8 @@
     if (e.target === overlayEl) hideOverlay();
   });
   document.getElementById("resetModsBtn").addEventListener("click", () => {
+    state.chaosMode = false;
+    state.chaosActiveMod = null;
     MODS.forEach(m => state.mods[m.key] = false);
     syncModCards();
     loadBestScore();
@@ -851,13 +952,43 @@
   const settingsBtn = document.getElementById("settingsBtn");
   const modalClose = document.getElementById("modalClose");
 
-  function openModal(){ modalOverlay.classList.add("show"); }
+  function openModal(){
+    modalOverlay.classList.add("show");
+    chaosKeyBuffer = "";
+    syncModCards();
+  }
   function closeModal(){ modalOverlay.classList.remove("show"); }
 
   settingsBtn.addEventListener("click", openModal);
   modalClose.addEventListener("click", closeModal);
   modalOverlay.addEventListener("click", (e) => {
     if (e.target === modalOverlay) closeModal();
+  });
+
+  // ---------- chaos mode cheat code ----------
+  // While the Mods tab of the menu is open, typing the letters "chaos" in
+  // sequence toggles Chaos Mode on/off, cheat-code style.
+  let chaosKeyBuffer = "";
+
+  function isModsTabOpen(){
+    const modsPanel = document.querySelector('.tab-panel[data-panel="mods"]');
+    return modalOverlay.classList.contains("show") && modsPanel && !modsPanel.hidden;
+  }
+
+  window.addEventListener("keydown", (e) => {
+    if (!isModsTabOpen()){
+      chaosKeyBuffer = "";
+      return;
+    }
+    if (e.key.length === 1 && /[a-z]/i.test(e.key)){
+      chaosKeyBuffer = (chaosKeyBuffer + e.key.toLowerCase()).slice(-5);
+      if (chaosKeyBuffer === "chaos"){
+        chaosKeyBuffer = "";
+        setChaosMode(!state.chaosMode);
+      }
+    } else {
+      chaosKeyBuffer = "";
+    }
   });
 
   // ---------- modal tabs (Mods / Settings) ----------
@@ -970,6 +1101,7 @@
 
   modListEl.querySelectorAll(".mod-square").forEach(square => {
     square.addEventListener("click", () => {
+      if (state.chaosMode) return; // mods are picked automatically while Chaos Mode is running
       const key = square.dataset.key;
       state.mods[key] = !state.mods[key];
       syncModCards();
@@ -982,11 +1114,19 @@
     MODS.forEach(m => {
       const square = modListEl.querySelector(`.mod-square[data-key="${m.key}"]`);
       square.classList.toggle("active", state.mods[m.key]);
+      square.classList.toggle("chaos-locked", state.chaosMode);
     });
     renderModDescPanel();
   }
 
   function renderModDescPanel(){
+    if (state.chaosMode){
+      const activeMod = MODS.find(m => m.key === state.chaosActiveMod);
+      modDescPanelEl.innerHTML = `<div class="mod-desc-item chaos-desc"><b>Chaos Mode:</b> mods shuffle themselves — a 10% chance per move to swap to a different random mod. Type "chaos" again to turn it off.<br>` +
+        (activeMod ? ` Currently active: <b>${activeMod.name}</b> &mdash; ${activeMod.desc}` : "") +
+        `</div>`;
+      return;
+    }
     const active = MODS.filter(m => state.mods[m.key]);
     if (active.length === 0){
       modDescPanelEl.innerHTML = `<p class="mod-desc-empty">Select a mod to see its description.</p>`;

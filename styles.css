@@ -280,6 +280,17 @@ header.title p {
   text-transform: uppercase;
 }
 
+.mod-chip.chaos-chip {
+  background: linear-gradient(90deg, rgb(212,60,60), rgb(212,175,55), rgb(93,138,168), rgb(186,50,175), rgb(212,60,60));
+  background-size: 300% 100%;
+  animation: chaosChipShift 3s linear infinite;
+}
+
+@keyframes chaosChipShift {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 300% 50%; }
+}
+
 .scorebar {
   display: flex;
   gap: 8px;
@@ -342,6 +353,12 @@ button.pill.secondary {
 
 button.pill.secondary:hover {
   background: var(--accent-tint);
+}
+
+button.pill.secondary.active {
+  background: var(--accent-strong);
+  color: #fff;
+  border-color: transparent;
 }
 
 .board-area {
@@ -910,6 +927,17 @@ button.pill.secondary:hover {
 
 .mod-square.active:active {
   transform: rotate(10deg) scale(0.96);
+}
+
+.mod-square.chaos-locked {
+  cursor: not-allowed;
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.mod-desc-item.chaos-desc {
+  border-left: 3px solid rgb(212,175,55);
+  padding-left: 8px;
 }
 
 .mod-desc-panel {
