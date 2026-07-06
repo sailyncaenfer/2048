@@ -24,13 +24,13 @@
       desc:"Only newly spawned tiles are shown." },
     { key:"coinflip",  name:"Coin Flip", abbr:"CF", accent:"rgb(212,175,55)",
       desc:"2's and 4's are equally likely to spawn." },
-    { key:"volatile",  name:"Volatile",  abbr:"VL", accent:"rgb(158, 40, 40)",
+    { key:"volatile",  name:"Volatile",  abbr:"VL", accent:"rgb(252, 76, 228)",
       desc:"Two new tiles spawn after every move instead of one." },
     { key:"extrovert", name:"Extrovert", abbr:"XT", accent:"rgb(255, 140, 66)",
       desc:"If the biggest tile sits in the same spot for 7 moves, it swaps with the tile in a fixed spot toward the center. In Chaos Mode this tracking always runs in the background, even while Extrovert isn't the active mod." },
     { key:"lockout",   name:"Lockout",   abbr:"LO", accent:"rgb(255, 79, 79)",
       desc:"A random direction is disabled every move." },
-    { key:"magician",  name:"Magician",  abbr:"MG", accent:"rgb(186, 50, 175)",
+    { key:"magician",  name:"Magician",  abbr:"MG", accent:"rgb(169, 54, 160)",
       desc:"Making the same merge twice spawns a temporary unmergeable block. Make unique merges to make it vanish." },
   ];
 
