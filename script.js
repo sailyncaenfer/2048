@@ -880,10 +880,25 @@
 
   // ---------- input ----------
   const KEY_DIR = {
-    ArrowLeft: DIR.LEFT, a: DIR.LEFT, A: DIR.LEFT,
-    ArrowRight: DIR.RIGHT, d: DIR.RIGHT, D: DIR.RIGHT,
-    ArrowUp: DIR.UP, w: DIR.UP, W: DIR.UP,
-    ArrowDown: DIR.DOWN, s: DIR.DOWN, S: DIR.DOWN,
+    ArrowLeft: DIR.LEFT,
+    ArrowRight: DIR.RIGHT,
+    ArrowUp: DIR.UP,
+    ArrowDown: DIR.DOWN,
+
+    a: DIR.LEFT, A: DIR.LEFT,
+    d: DIR.RIGHT, D: DIR.RIGHT,
+    w: DIR.UP, W: DIR.UP,
+    s: DIR.DOWN, S: DIR.DOWN,
+
+    h: DIR.LEFT, H: DIR.LEFT,
+    j: DIR.DOWN, J: DIR.DOWN,
+    k: DIR.UP, K: DIR.UP,
+    l: DIR.RIGHT, L: DIR.RIGHT,
+
+    Numpad4: DIR.LEFT,
+    Numpad6: DIR.RIGHT,
+    Numpad8: DIR.UP,
+    Numpad2: DIR.DOWN,
   };
 
   window.addEventListener("keydown", (e) => {
