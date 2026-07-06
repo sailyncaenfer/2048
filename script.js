@@ -366,6 +366,10 @@
   function extrovertIsTracking(){
     return state.mods.extrovert || state.chaosMode;
   }
+  
+  function extrovertIsActive(){
+      return state.mods.extrovert;
+  }
 
   // Briefly rings the given cell to call out a teleport swap.
   function spawnExtrovertGlow(r, c){
@@ -425,7 +429,10 @@
           state.extrovertTracker[id] = { row:r, col:c, streak:1, value:maxVal };
         }
 
-        if (state.extrovertTracker[id].streak >= EXTROVERT_STREAK_NEEDED){
+        if (
+            extrovertIsActive() &&
+            state.extrovertTracker[id].streak >= EXTROVERT_STREAK_NEEDED
+        ){
           const [tr, tc] = EXTROVERT_TARGET[r][c];
           delete state.extrovertTracker[id];
 
@@ -937,7 +944,7 @@
   // whenever tracking is actually happening (mod on, or passively during
   // Chaos Mode), same condition processExtrovert() uses.
   function renderExtrovertLog(){
-    const active = extrovertIsTracking();
+    const active = extrovertIsActive();
     extrovertLogEl.classList.toggle("show", active);
     if (!active) return;
 
