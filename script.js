@@ -1344,6 +1344,7 @@
   }
 
   function getFontSizeClass(value) {
+    if (value < 100) return "tile-size-tiny";    // 1-3 digits
     if (value < 1000) return "tile-size-small";    // 1-3 digits
     if (value < 10000) return "tile-size-medium";  // 4 digits
     if (value < 100000) return "tile-size-large";  // 5 digits
