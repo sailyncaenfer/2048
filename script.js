@@ -32,6 +32,8 @@
       desc:"A random direction is disabled every move." },
     { key:"magician",  name:"Magician",  abbr:"MG", accent:"rgb(169, 54, 160)",
       desc:"Making the same merge twice spawns a temporary unmergeable block. Make unique merges to make it vanish." },
+    { key:"expert",    name:"Expert",    abbr:"EX", accent:"rgb(139, 0, 0)",
+      desc:"Tiles are generated on the worst possible position with the worst possible value." },
   ];
 
   let nextTileId = 1;
@@ -47,7 +49,7 @@
     tapControlsEnabled: false,
     theme: "light",
     lockedDir: null, // direction disabled this turn while Lockout is active
-    mods: { gravity:false, invisible:false, magician:false, volatile:false, blocked:false, touch:false, coinflip:false, lockout:false, extrovert:false },
+    mods: { gravity:false, invisible:false, magician:false, volatile:false, blocked:false, touch:false, coinflip:false, lockout:false, extrovert:false, expert:false },
     chaosMode: false,     // true once the "chaos" cheat code has been typed in the mods menu
     chaosActiveMod: null, // key of the single mod Chaos Mode currently has switched on
     extrovertTracker: {}  // tile id -> { row, col, streak } for Extrovert's "stayed put" tracking
@@ -129,6 +131,511 @@
 
   function cloneBoard(g){
     return g.map(row => row.map(cell => cell ? { id: cell.id, value: cell.value } : null));
+  }
+
+  // ---------- Expert mod: adversarial spawn engine ----------
+  // Ported from the standalone "2048?" Expert build. It plays the role of
+  // an evil dealer: instead of dropping a random 2 or 4, it runs a shallow
+  // expectiminimax search to find whichever empty cell and value hurts the
+  // player's position the most. It only ever looks at plain tile values (a
+  // flat 16-number array, 0 = empty) -- it never touches the real
+  // {id,value} board or tile ids, so it can simulate hypothetical futures
+  // with zero risk of corrupting real game state. This engine drives every
+  // spawn after a move once Expert is on; the two starting tiles at the
+  // beginning of a game are still placed randomly, same as with every
+  // other mod.
+  const Expert = (function(){
+    const evalCache = new Map();
+    const PROB_2 = 0.9, PROB_4 = 0.1;
+
+    function emptyBoardFlat(){ return new Array(SIZE*SIZE).fill(0); }
+    function availableCellsFlat(b){
+      const cells = [];
+      for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) if (!b[r*SIZE+c]) cells.push([r,c]);
+      return cells;
+    }
+    function maxTileFlat(b){
+      let m = 0;
+      for (let i=0;i<SIZE*SIZE;i++) if (b[i] > m) m = b[i];
+      return m;
+    }
+    function cloneFlat(b){ return b.slice(); }
+
+    function slideRow(a,b,c,d){
+      let row = [a,b,c,d].filter(v => v);
+      let gainedScore = 0;
+      const out = [];
+      for (let i=0;i<row.length;i++){
+        if (i+1 < row.length && row[i] === row[i+1]){
+          const val = row[i]*2;
+          out.push(val);
+          gainedScore += val;
+          i++;
+        } else {
+          out.push(row[i]);
+        }
+      }
+      while (out.length < SIZE) out.push(0);
+      return { row: out, score: gainedScore };
+    }
+
+    function rotateFlat(b){
+      const out = emptyBoardFlat();
+      for (let r=0;r<SIZE;r++){
+        for (let c=0;c<SIZE;c++){
+          out[c*SIZE + (SIZE-1-r)] = b[r*SIZE+c];
+        }
+      }
+      return out;
+    }
+
+    function moveLeftFlat(b){
+      let totalScore = 0, moved = false;
+      const newBoard = emptyBoardFlat();
+      for (let r=0;r<SIZE;r++){
+        const offset = r*SIZE;
+        const { row, score } = slideRow(b[offset], b[offset+1], b[offset+2], b[offset+3]);
+        totalScore += score;
+        for (let c=0;c<SIZE;c++) newBoard[offset+c] = row[c];
+        if (!moved){
+          for (let c=0;c<SIZE;c++){
+            if (b[offset+c] !== newBoard[offset+c]){ moved = true; break; }
+          }
+        }
+      }
+      return { board: newBoard, score: totalScore, moved };
+    }
+
+    function applyDirectionFlat(b, dir){
+      const rotations = [0,3,2,1][dir];
+      let cur = b;
+      for (let i=0;i<rotations;i++) cur = rotateFlat(cur);
+      const res = moveLeftFlat(cur);
+      const unrot = (4 - rotations) % 4;
+      let nb = res.board;
+      for (let i=0;i<unrot;i++) nb = rotateFlat(nb);
+      return { board: nb, score: res.score, moved: res.moved };
+    }
+
+    const SNAKE_WEIGHTS = [
+      65536, 32768, 16384, 8192,
+        512,  1024,  2048, 4096,
+        256,   128,    64,   32,
+          2,     4,     8,   16
+    ];
+
+    function snakeScore(b){
+      let s = 0;
+      for (let i=0;i<SIZE*SIZE;i++) s += b[i] * SNAKE_WEIGHTS[i];
+      return s;
+    }
+
+    function monotonicityScore(b){
+      let s = 0;
+      for (let r=0;r<SIZE;r++){
+        for (let c=0;c<SIZE-1;c++){
+          const a = b[r*SIZE+c], d = b[r*SIZE+(c+1)];
+          if (a && d) s -= Math.abs(Math.log2(a) - Math.log2(d));
+        }
+      }
+      for (let c=0;c<SIZE;c++){
+        for (let r=0;r<SIZE-1;r++){
+          const a = b[r*SIZE+c], d = b[(r+1)*SIZE+c];
+          if (a && d) s -= Math.abs(Math.log2(a) - Math.log2(d));
+        }
+      }
+      return s;
+    }
+
+    function emptySpaceScore(b){
+      let n = 0;
+      for (let i=0;i<SIZE*SIZE;i++) if (!b[i]) n++;
+      return n;
+    }
+
+    function mergePotential(b){
+      let score = 0;
+      for (let r=0;r<SIZE;r++){
+        for (let c=0;c<SIZE;c++){
+          const v = b[r*SIZE+c];
+          if (!v) continue;
+          if (c+1 < SIZE && b[r*SIZE+(c+1)] === v) score += v;
+          if (r+1 < SIZE && b[(r+1)*SIZE+c] === v) score += v;
+        }
+      }
+      return score;
+    }
+
+    function evaluateBoardForPlayer(b){
+      const k = b.join(",");
+      if (evalCache.has(k)) return evalCache.get(k);
+      const v = (
+        snakeScore(b)                 * 0.00001 +
+        monotonicityScore(b)          * 1       +
+        emptySpaceScore(b)            * 10      +
+        mergePotential(b)             * 0.5     +
+        Math.log2(maxTileFlat(b) + 1) * 20
+      );
+      evalCache.set(k, v);
+      return v;
+    }
+
+    function anchorLevel(r,c){
+      return ((r === 0 || r === SIZE-1) ? 1 : 0) + ((c === 0 || c === SIZE-1) ? 1 : 0);
+    }
+
+    function findBigTile(b){
+      let bigVal=0, bigR=0, bigC=0;
+      for (let r=0;r<SIZE;r++){
+        for (let c=0;c<SIZE;c++){
+          const v = b[r*SIZE+c];
+          if (v > bigVal){ bigVal=v; bigR=r; bigC=c; }
+        }
+      }
+      return { val: bigVal, r: bigR, c: bigC };
+    }
+
+    function bigTileAfterMove(b, dir){
+      const { board: nb, moved } = applyDirectionFlat(b, dir);
+      if (!moved) return null;
+      const { r, c } = findBigTile(nb);
+      return { r, c };
+    }
+
+    function cornerEscapeScore(b, spawnR, spawnC, spawnVal){
+      const big = findBigTile(b);
+      if (!big.val) return 0;
+      const bigAnchor = anchorLevel(big.r, big.c);
+      if (bigAnchor === 0) return 0;
+
+      const tmp = cloneFlat(b);
+      tmp[spawnR*SIZE+spawnC] = spawnVal;
+      let safeMovesBefore = 0, safeMovesAfter = 0;
+
+      for (let dir=0; dir<4; dir++){
+        const origResult = bigTileAfterMove(b, dir);
+        if (origResult && anchorLevel(origResult.r, origResult.c) >= bigAnchor) safeMovesBefore++;
+        const spawnResult = bigTileAfterMove(tmp, dir);
+        if (spawnResult && anchorLevel(spawnResult.r, spawnResult.c) >= bigAnchor) safeMovesAfter++;
+      }
+
+      const safeMovesEliminated = safeMovesBefore - safeMovesAfter;
+      const anchorBonus = safeMovesEliminated * big.val * big.val * 0.5;
+      const noSafeMoveBonus = (safeMovesAfter === 0 && safeMovesBefore > 0) ? big.val * big.val * 2 : 0;
+
+      let adjacencyBonus = 0;
+      for (const [dr,dc] of [[-1,0],[1,0],[0,-1],[0,1]]){
+        const nr = big.r+dr, nc = big.c+dc;
+        if (nr < 0 || nr >= SIZE || nc < 0 || nc >= SIZE) continue;
+        if (nr === spawnR && nc === spawnC) adjacencyBonus += big.val * 50;
+      }
+
+      let trapBonus = 0;
+      if (bigAnchor === 2){
+        const escapeRow = (big.r === 0) ? 1 : SIZE-2;
+        const escapeCol = (big.c === 0) ? 1 : SIZE-2;
+        if ((spawnR === escapeRow && spawnC === big.c) || (spawnR === big.r && spawnC === escapeCol)){
+          trapBonus += big.val * big.val * 0.3;
+        }
+      }
+      return anchorBonus + noSafeMoveBonus + adjacencyBonus + trapBonus;
+    }
+
+    function bigTileBlockScore(b, spawnR, spawnC){
+      const big = findBigTile(b);
+      if (!big.val || big.r === 0 || big.r === SIZE-1 || big.c === 0 || big.c === SIZE-1) return 0;
+
+      const corners = [[0,0],[0,SIZE-1],[SIZE-1,0],[SIZE-1,SIZE-1]];
+      let score = 0;
+
+      const wallTargets = [
+        { r:0, c:big.c, dir:"up" },
+        { r:SIZE-1, c:big.c, dir:"down" },
+        { r:big.r, c:0, dir:"left" },
+        { r:big.r, c:SIZE-1, dir:"right" }
+      ];
+
+      for (const target of wallTargets){
+        const sameColumn = spawnC === big.c;
+        const sameRow = spawnR === big.r;
+        const onPath = (target.dir === "up" && sameColumn && spawnR < big.r) ||
+                       (target.dir === "down" && sameColumn && spawnR > big.r) ||
+                       (target.dir === "left" && sameRow && spawnC < big.c) ||
+                       (target.dir === "right" && sameRow && spawnC > big.c);
+        if (!onPath) continue;
+
+        const toWall = target.dir === "up" || target.dir === "down" ? Math.abs(target.r - big.r) : Math.abs(target.c - big.c);
+        const toSpawn = Math.abs(spawnR - big.r) + Math.abs(spawnC - big.c);
+        const closeness = 1 + (toWall - toSpawn) / toWall;
+        score += big.val * big.val * closeness;
+      }
+
+      for (const [cornerR, cornerC] of corners){
+        const horizontalThenVertical =
+          (spawnR === big.r && ((cornerC > big.c && spawnC > big.c && spawnC <= cornerC) || (cornerC < big.c && spawnC < big.c && spawnC >= cornerC))) ||
+          (spawnC === cornerC && ((cornerR > big.r && spawnR > big.r && spawnR <= cornerR) || (cornerR < big.r && spawnR < big.r && spawnR >= cornerR)));
+        const verticalThenHorizontal =
+          (spawnC === big.c && ((cornerR > big.r && spawnR > big.r && spawnR <= cornerR) || (cornerR < big.r && spawnR < big.r && spawnR >= cornerR))) ||
+          (spawnR === cornerR && ((cornerC > big.c && spawnC > big.c && spawnC <= cornerC) || (cornerC < big.c && spawnC < big.c && spawnC >= cornerC)));
+
+        if (!horizontalThenVertical && !verticalThenHorizontal) continue;
+
+        const toCorner = Math.abs(cornerR - big.r) + Math.abs(cornerC - big.c);
+        const toSpawn = Math.abs(spawnR - big.r) + Math.abs(spawnC - big.c);
+        const closeness = 1 + (toCorner - toSpawn) / toCorner;
+        score += big.val * big.val * closeness;
+      }
+
+      if (spawnR === big.r || spawnC === big.c) score += big.val * 25;
+      return score;
+    }
+
+    function simulatePlayerBest(b){
+      let best = -Infinity;
+      for (let dir=0; dir<4; dir++){
+        const { board: nb, moved, score } = applyDirectionFlat(b, dir);
+        if (!moved) continue;
+        let mergeScore = 0;
+        for (let r=0;r<SIZE;r++){
+          for (let c=0;c<SIZE;c++){
+            const v = b[r*SIZE+c];
+            if (!v) continue;
+            if (c+1 < SIZE && nb[r*SIZE+(c+1)] === v) mergeScore += v*v;
+            if (r+1 < SIZE && nb[(r+1)*SIZE+c] === v) mergeScore += v*v;
+          }
+        }
+        best = Math.max(best, mergeScore + score*score);
+      }
+      return best === -Infinity ? 0 : best;
+    }
+
+    function countFutureMerges(b){
+      let total = 0;
+      for (let dir=0; dir<4; dir++){
+        const { board: nb, moved } = applyDirectionFlat(b, dir);
+        if (!moved) continue;
+        for (let r=0;r<SIZE;r++){
+          for (let c=0;c<SIZE;c++){
+            const v = b[r*SIZE+c];
+            if (!v) continue;
+            if (c+1 < SIZE && nb[r*SIZE+(c+1)] === v) total += v*v;
+            if (r+1 < SIZE && nb[(r+1)*SIZE+c] === v) total += v*v;
+          }
+        }
+      }
+      return total;
+    }
+
+    function cellDisruptionProfile(b, r, c){
+      return {
+        block: bigTileBlockScore(b, r, c),
+        escape2: cornerEscapeScore(b, r, c, 2),
+        escape4: cornerEscapeScore(b, r, c, 4)
+      };
+    }
+
+    function spawnImpactScore(b, r, c, val, profile){
+      const tmp = cloneFlat(b);
+      tmp[r*SIZE+c] = val;
+      let sc = -(simulatePlayerBest(tmp) - simulatePlayerBest(b));
+      for (const [dr,dc] of [[-1,0],[1,0],[0,-1],[0,1]]){
+        const nr = r+dr, nc = c+dc;
+        if (nr >= 0 && nr < SIZE && nc >= 0 && nc < SIZE){
+          const neighbor = b[nr*SIZE+nc];
+          if (neighbor === val) sc += 100 + val*val;
+          else if (neighbor > val) sc += neighbor*5;
+        }
+      }
+      sc -= countFutureMerges(tmp);
+      let rowColMatches = 0;
+      for (let i=0;i<SIZE;i++){
+        if (b[r*SIZE+i] === val && i !== c) rowColMatches++;
+        if (b[i*SIZE+c] === val && i !== r) rowColMatches++;
+      }
+      sc += rowColMatches * val * 10;
+      const p = profile || cellDisruptionProfile(b, r, c);
+      sc += (val === 2 ? p.escape2 : p.escape4);
+      sc += p.block;
+      sc += (snakeScore(b) - snakeScore(tmp)) * 0.01;
+      sc += (monotonicityScore(b) - monotonicityScore(tmp)) * 100;
+      sc += (16 - emptySpaceScore(tmp)) * 500;
+      return sc;
+    }
+
+    function expectiminimaxMax(b, depth, ceiling = Infinity, beta = Infinity){
+      if (depth <= 0) return evaluateBoardForPlayer(b);
+      let best = -Infinity, anyMoved = false;
+      for (let dir=0; dir<4; dir++){
+        const { board: nb, moved } = applyDirectionFlat(b, dir);
+        if (!moved) continue;
+        anyMoved = true;
+        const val = expectiminimaxChance(nb, depth-1, ceiling);
+        if (val > best) best = val;
+        if (best >= beta) return best;
+      }
+      return anyMoved ? best : evaluateBoardForPlayer(b);
+    }
+
+    function expectiminimaxChance(b, depth, ceiling = Infinity){
+      const empty = availableCellsFlat(b);
+      if (!empty.length) return evaluateBoardForPlayer(b);
+
+      const maxCells = depth >= 4 ? 4 : depth >= 2 ? 6 : 8;
+      const cells = empty.length > maxCells ? evilSampleCells(b, empty, maxCells) : empty;
+
+      let worstExpected = Infinity;
+      for (const idx of cells){
+        const b2 = cloneFlat(b); b2[idx[0]*SIZE+idx[1]] = 2;
+        const b4 = cloneFlat(b); b4[idx[0]*SIZE+idx[1]] = 4;
+        const ev2 = (depth <= 1) ? evaluateBoardForPlayer(b2) : expectiminimaxMax(b2, depth-1, worstExpected);
+        const ev4 = (depth <= 1) ? evaluateBoardForPlayer(b4) : expectiminimaxMax(b4, depth-1, worstExpected);
+        const expected = PROB_2*ev2 + PROB_4*ev4;
+
+        if (expected < worstExpected) worstExpected = expected;
+        if (worstExpected < ceiling * 0.85) return worstExpected;
+      }
+      return worstExpected;
+    }
+
+    function getMaxDepth(b){
+      const emptyCount = availableCellsFlat(b).length;
+      if (emptyCount <= 3) return 6;
+      if (emptyCount <= 6) return 5;
+      if (emptyCount <= 10) return 4;
+      return 3;
+    }
+
+    function evilCellPriority(b, r, c, profile){
+      const centerPenalty = Math.abs(r - 1.5) + Math.abs(c - 1.5);
+      let neighbourMax = 0;
+      for (const [dr,dc] of [[-1,0],[1,0],[0,-1],[0,1]]){
+        const nr = r+dr, nc = c+dc;
+        if (nr >= 0 && nr < SIZE && nc >= 0 && nc < SIZE) neighbourMax = Math.max(neighbourMax, b[nr*SIZE+nc]);
+      }
+      const v2Base = centerPenalty * 10 + Math.log2(neighbourMax + 1);
+      const p = profile || cellDisruptionProfile(b, r, c);
+      const disruption = p.block + p.escape2 + p.escape4;
+      return v2Base + disruption * 0.0001;
+    }
+
+    function evilSampleCells(b, cells, n){
+      if (cells.length <= n) return cells;
+      return cells.slice()
+        .sort((a, bv) => evilCellPriority(b, bv[0], bv[1]) - evilCellPriority(b, a[0], a[1]))
+        .slice(0, n);
+    }
+
+    function findBestAdversarialSpawn(b, maxDepth){
+      const empty = availableCellsFlat(b);
+      if (!empty.length) return null;
+
+      const profiles = new Map();
+      for (const [r,c] of empty) profiles.set(r*SIZE+c, cellDisruptionProfile(b, r, c));
+
+      const ranked = empty.slice().sort((a, bb) => {
+        const pa = profiles.get(a[0]*SIZE+a[1]);
+        const pb = profiles.get(bb[0]*SIZE+bb[1]);
+        return evilCellPriority(b, bb[0], bb[1], pb) - evilCellPriority(b, a[0], a[1], pa);
+      });
+
+      const cap = maxDepth >= 5 ? 6 : maxDepth >= 3 ? 9 : ranked.length;
+      const candidates = ranked.length > cap ? ranked.slice(0, cap) : ranked;
+
+      const EPS = 1e-6;
+      let worstScore = Infinity, worstCell = null, worstVal = 2, worstImpact = -Infinity;
+
+      for (const [r,c] of candidates){
+        const profile = profiles.get(r*SIZE+c);
+        for (const val of [2,4]){
+          const tmp = cloneFlat(b);
+          tmp[r*SIZE+c] = val;
+          const playerScore = expectiminimaxMax(tmp, maxDepth-1, Infinity, worstScore);
+          const impact = spawnImpactScore(b, r, c, val, profile);
+          const better = playerScore < worstScore - EPS ||
+                         (Math.abs(playerScore - worstScore) < EPS && impact > worstImpact);
+          if (better){
+            worstScore = playerScore; worstCell = [r,c];
+            worstVal = val; worstImpact = impact;
+          }
+        }
+      }
+      if (!worstCell){ const [r,c] = empty[0]; return { r, c, val: 2, score: 0 }; }
+      return { r: worstCell[0], c: worstCell[1], val: worstVal, score: worstScore };
+    }
+
+    function midpointCell(b, p1, p2){
+      const mr = (p1.r + p2.r)/2, mc = (p1.c + p2.c)/2;
+      const empty = availableCellsFlat(b);
+      if (!empty.length) return null;
+      empty.sort((a, bv) => {
+        const da = (a[0]-mr)**2 + (a[1]-mc)**2;
+        const db = (bv[0]-mr)**2 + (bv[1]-mc)**2;
+        return da - db;
+      });
+      return { r: empty[0][0], c: empty[0][1] };
+    }
+
+    function findBlockablePair(b){
+      const tiles = [];
+      for (let r=0;r<SIZE;r++){
+        for (let c=0;c<SIZE;c++){
+          if (b[r*SIZE+c]) tiles.push({ r, c, val: b[r*SIZE+c] });
+        }
+      }
+      if (tiles.length > 3) return null;
+      for (let i=0;i<tiles.length;i++){
+        for (let j=i+1;j<tiles.length;j++){
+          const a = tiles[i], bb = tiles[j];
+          if (a.val !== bb.val) continue;
+          if (a.r !== bb.r && a.c !== bb.c) continue;
+          return { p1: a, p2: bb, val: a.val };
+        }
+      }
+      return null;
+    }
+
+    function deviousSpawn(b){
+      const empty = availableCellsFlat(b);
+      if (!empty.length) return null;
+
+      const pair = findBlockablePair(b);
+      if (pair){
+        const mid = midpointCell(b, pair.p1, pair.p2);
+        if (mid) return { r: mid.r, c: mid.c, val: 4 };
+      }
+
+      const depth = getMaxDepth(b);
+      return findBestAdversarialSpawn(b, depth);
+    }
+
+    return {
+      pickSpawn: function(flatBoard){ return deviousSpawn(flatBoard); }
+    };
+  })();
+
+  // Converts the live {id,value} board into the flat number array the
+  // Expert engine works with, runs its adversarial search, and places the
+  // result as a real tile. Blocked's obstacle sentinel (1) and Magician's
+  // TV-static sentinel (-1) are remapped to an ordinary positive number
+  // first so they read as "occupied" to the engine instead of tripping up
+  // its math (it takes log2() of tile values, which breaks on negatives).
+  function expertSpawn(){
+    const cells = emptyCells();
+    if (cells.length === 0) return null;
+
+    const flat = new Array(SIZE*SIZE).fill(0);
+    for (let r=0;r<SIZE;r++){
+      for (let c=0;c<SIZE;c++){
+        const cell = state.board[r][c];
+        flat[r*SIZE+c] = cell ? (cell.value > 0 ? cell.value : 2) : 0;
+      }
+    }
+
+    const chosen = Expert.pickSpawn(flat);
+    if (!chosen) return null;
+
+    state.board[chosen.r][chosen.c] = { id: nextTileId++, value: chosen.val };
+    return chosen.r*SIZE + chosen.c;
   }
 
   // ---------- game setup ----------
@@ -632,10 +1139,10 @@
         const sB = randomSpawnBlock();
         if (sB !== null) justSpawned.push(sB);
       } else {
-        const s1 = randomSpawn();
+        const s1 = state.mods.expert ? expertSpawn() : randomSpawn();
         if (s1 !== null) justSpawned.push(s1);
         if (state.mods.volatile){
-          const s2 = randomSpawn();
+          const s2 = state.mods.expert ? expertSpawn() : randomSpawn();
           if (s2 !== null) justSpawned.push(s2);
         }
       }
