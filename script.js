@@ -64,6 +64,103 @@
     }
   }
 
+  // ---------- persistence (save/restore + cross-tab sync) ----------
+  // The full board (not just the best score) is persisted so that closing
+  // the tab and coming back - or having the game open in several tabs at
+  // once - doesn't lose progress. Every tab writes to the same localStorage
+  // key after each move; other tabs pick up the change via the "storage"
+  // event and re-render themselves to match, so all open instances of the
+  // game always show the same, single, current board.
+  const SAVE_KEY = "2048modlab_savegame";
+  let restoringSave = false; // true while a save is being applied; guards against re-saving mid-restore
+
+  function serializeBoard(grid){
+    return grid.map(row => row.map(cell => cell ? { id: cell.id, value: cell.value } : null));
+  }
+
+  function snapshotState(){
+    return {
+      board: serializeBoard(state.board),
+      magicCounter: state.magicCounter,
+      score: state.score,
+      best: state.best,
+      moveCount: state.moveCount,
+      gameOver: state.gameOver,
+      lastMergeValue: state.lastMergeValue,
+      spawnLocs: state.spawnLocs,
+      magicLog: state.magicLog,
+      lockedDir: state.lockedDir,
+      mods: state.mods,
+      chaosMode: state.chaosMode,
+      chaosActiveMod: state.chaosActiveMod,
+      extrovertTracker: state.extrovertTracker,
+      nextTileId: nextTileId
+    };
+  }
+
+  function saveGame(){
+    if (restoringSave) return; // don't echo a just-applied remote save right back out
+    try {
+      localStorage.setItem(SAVE_KEY, JSON.stringify(snapshotState()));
+    } catch(e) {}
+  }
+
+  // Applies a previously-saved (or another tab's just-saved) snapshot to
+  // the live state and redraws. Used both for the initial page load and
+  // for picking up moves made in other open tabs.
+  function applySnapshot(data){
+    if (!data || !Array.isArray(data.board)) return false;
+
+    restoringSave = true;
+
+    state.board = data.board.map(row => row.map(cell => cell ? { id: cell.id, value: cell.value } : null));
+    state.magicCounter = Array.isArray(data.magicCounter) ? data.magicCounter : emptyGrid(0);
+    state.score = typeof data.score === "number" ? data.score : 0;
+    if (typeof data.best === "number") state.best = data.best;
+    state.moveCount = typeof data.moveCount === "number" ? data.moveCount : 0;
+    state.gameOver = !!data.gameOver;
+    state.lastMergeValue = typeof data.lastMergeValue === "number" ? data.lastMergeValue : 0;
+    state.spawnLocs = Array.isArray(data.spawnLocs) ? data.spawnLocs : [];
+    state.magicLog = Array.isArray(data.magicLog) ? data.magicLog : [];
+    state.lockedDir = (typeof data.lockedDir === "number") ? data.lockedDir : null;
+    if (data.mods) state.mods = Object.assign({}, state.mods, data.mods);
+    state.chaosMode = !!data.chaosMode;
+    state.chaosActiveMod = data.chaosActiveMod || null;
+    state.extrovertTracker = data.extrovertTracker && typeof data.extrovertTracker === "object" ? data.extrovertTracker : {};
+
+    if (typeof data.nextTileId === "number") nextTileId = data.nextTileId;
+
+    hideOverlay();
+    stopAllMagicAnimations();
+    tilesLayerEl.innerHTML = "";
+    tileEls.clear();
+    syncModCards();
+    render();
+
+    restoringSave = false;
+    return true;
+  }
+
+  function loadGame(){
+    try {
+      const raw = localStorage.getItem(SAVE_KEY);
+      if (!raw) return false;
+      return applySnapshot(JSON.parse(raw));
+    } catch(e){
+      return false;
+    }
+  }
+
+  // Fires in every OTHER tab whenever this key changes here - never in the
+  // tab that made the change - which is exactly what's needed to mirror a
+  // move made in one tab onto every other open instance.
+  window.addEventListener("storage", (e) => {
+    if (e.key !== SAVE_KEY || !e.newValue) return;
+    try {
+      applySnapshot(JSON.parse(e.newValue));
+    } catch(err) {}
+  });
+
   try {
     const savedAnim = localStorage.getItem("2048modlab_anim");
     if (savedAnim === "off") state.animationsEnabled = false;
@@ -741,6 +838,7 @@
     tilesLayerEl.innerHTML = "";
     tileEls.clear();
     render();
+    saveGame();
   }
 
   function randomSpawn(){
@@ -1234,6 +1332,8 @@
     if (state.gameOver){
       if (!wasGameOver) triggerLossFlash();
     }
+
+    saveGame();
   }
 
   // ---------- rendering ----------
@@ -1919,6 +2019,30 @@
       .join("");
   }
 
+  window.setBoard = function(values) {
+    let id = 1;
+
+    for (let r = 0; r < 4; r++) {
+      for (let c = 0; c < 4; c++) {
+        const v = values[r][c];
+
+        if (v === 0 || v === null) {
+          state.board[r][c] = null;
+        } else {
+            state.board[r][c] = {
+              id: id++,
+              value: v
+            };
+          }
+
+          state.magicCounter[r][c] = 0;
+        }
+      }
+
+      render();
+      saveGame();
+    };
+
   // ---------- boot ----------
   syncModCards();
   syncAnimButtons();
@@ -1926,5 +2050,5 @@
   syncTapControlsButtons();
   syncTapZones();
   loadBestScore();
-  newGame();
+  if (!loadGame()) newGame();
 })();
