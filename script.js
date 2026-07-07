@@ -33,7 +33,7 @@
     { key:"magician",  name:"Magician",  abbr:"MG", accent:"rgb(169, 54, 160)",
       desc:"Making the same merge twice spawns a temporary unmergeable block. Make unique merges to make it vanish." },
     { key:"expert",    name:"Expert",    abbr:"EX", accent:"rgb(139, 0, 0)",
-      desc:"Tiles are generated on the worst possible position with the worst possible value." },
+      desc:"Tiles are spawned on the worst possible position with the worst possible value." },
   ];
 
   let nextTileId = 1;
