@@ -518,25 +518,57 @@
     }
 
     function getMaxDepth(b){
-      /*
+      // Adaptive again: an emptier board means more legitimately different
+      // spawn options worth comparing, so we go shallower-but-wider (see
+      // the cap in findBestAdversarialSpawn) rather than spending the whole
+      // time budget going deep on a handful of pre-judged cells. As cells
+      // fill in there's less to choose between, so we can afford to go
+      // deeper on the few candidates that remain.
       const emptyCount = availableCellsFlat(b).length;
-      if (emptyCount <= 3) return 6;
-      if (emptyCount <= 6) return 5;
-      if (emptyCount <= 10) return 4; */
-      return 10;
+      if (emptyCount <= 3) return 7;
+      if (emptyCount <= 6) return 6;
+      if (emptyCount <= 10) return 5;
+      return 4;
     }
 
+    // Ranks empty cells by how disruptive a spawn there would actually be,
+    // so the search's candidate shortlist (see findBestAdversarialSpawn)
+    // reflects the live board instead of pure geometry. This used to lean
+    // almost entirely on distance-from-center (a constant x10 term), with
+    // the real board-aware signals (block/escape scores) scaled down to
+    // x0.0001 -- effectively invisible. That made the four corners win the
+    // pre-filter on every board regardless of whether anything interesting
+    // was actually happening there, so Expert always narrowed its search
+    // down to corner candidates before the real search even ran. Now the
+    // board-aware terms dominate, and position on the grid only matters
+    // through mechanics that actually make it matter (trapping or blocking
+    // the current biggest tile).
     function evilCellPriority(b, r, c, profile){
-      const centerPenalty = Math.abs(r - 1.5) + Math.abs(c - 1.5);
-      let neighbourMax = 0;
-      for (const [dr,dc] of [[-1,0],[1,0],[0,-1],[0,1]]){
-        const nr = r+dr, nc = c+dc;
-        if (nr >= 0 && nr < SIZE && nc >= 0 && nc < SIZE) neighbourMax = Math.max(neighbourMax, b[nr*SIZE+nc]);
-      }
-      const v2Base = centerPenalty * 10 + Math.log2(neighbourMax + 1);
       const p = profile || cellDisruptionProfile(b, r, c);
       const disruption = p.block + p.escape2 + p.escape4;
-      return v2Base + disruption * 0.0001;
+
+      // Local pressure: sitting next to existing tiles is what makes a
+      // spawn actually interfere with the player -- it can block a merge,
+      // clutter a run, or crowd something big. An isolated cell out in
+      // empty space does comparatively little regardless of where it sits.
+      let neighbourPressure = 0, neighbourMax = 0, adjacentTiles = 0;
+      for (const [dr,dc] of [[-1,0],[1,0],[0,-1],[0,1]]){
+        const nr = r+dr, nc = c+dc;
+        if (nr < 0 || nr >= SIZE || nc < 0 || nc >= SIZE) continue;
+        const nv = b[nr*SIZE+nc];
+        if (!nv) continue;
+        neighbourMax = Math.max(neighbourMax, nv);
+        neighbourPressure += nv;
+        adjacentTiles++;
+      }
+
+      // A light tie-breaker only, not the dominant term: all else equal,
+      // slightly prefer cells nearer the middle of the board since they
+      // touch more of the player's options.
+      const centralityNudge = 3 - (Math.abs(r - 1.5) + Math.abs(c - 1.5));
+
+      return disruption + neighbourPressure * 3 + adjacentTiles * 40 +
+             Math.log2(neighbourMax + 1) * 5 + centralityNudge * 2;
     }
 
     function evilSampleCells(b, cells, n){
