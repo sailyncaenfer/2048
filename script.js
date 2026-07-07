@@ -148,6 +148,24 @@
     const evalCache = new Map();
     const PROB_2 = 0.9, PROB_4 = 0.1;
 
+    // ---- move-time budget ----
+    // The search below is a real expectiminimax that can go many plies
+    // deep once the board gets full (see getMaxDepth). Left unbounded,
+    // a single spawn decision can take well over a second late-game,
+    // and since it runs synchronously on the main thread, every queued
+    // keypress has to wait for it -- that's the "lag while spamming"
+    // symptom. Instead of always searching to a fixed depth, we search
+    // under a wall-clock deadline: once time's up, any in-progress
+    // recursion is truncated to a static evaluation instead of
+    // recursing further, so whatever the search has found so far (the
+    // ranked candidates are already tried best-first) is returned
+    // immediately. Expert therefore always has *a* move ready well
+    // within a frame or two, even if it didn't get to look as deep as
+    // it ideally would have.
+    const MOVE_TIME_BUDGET_MS = 30;
+    let searchDeadline = Infinity;
+    function timeUp(){ return performance.now() >= searchDeadline; }
+
     function emptyBoardFlat(){ return new Array(SIZE*SIZE).fill(0); }
     function availableCellsFlat(b){
       const cells = [];
@@ -463,7 +481,7 @@
     }
 
     function expectiminimaxMax(b, depth, ceiling = Infinity, beta = Infinity){
-      if (depth <= 0) return evaluateBoardForPlayer(b);
+      if (depth <= 0 || timeUp()) return evaluateBoardForPlayer(b);
       let best = -Infinity, anyMoved = false;
       for (let dir=0; dir<4; dir++){
         const { board: nb, moved } = applyDirectionFlat(b, dir);
@@ -472,13 +490,14 @@
         const val = expectiminimaxChance(nb, depth-1, ceiling);
         if (val > best) best = val;
         if (best >= beta) return best;
+        if (timeUp()) break;
       }
       return anyMoved ? best : evaluateBoardForPlayer(b);
     }
 
     function expectiminimaxChance(b, depth, ceiling = Infinity){
       const empty = availableCellsFlat(b);
-      if (!empty.length) return evaluateBoardForPlayer(b);
+      if (!empty.length || timeUp()) return evaluateBoardForPlayer(b);
 
       const maxCells = depth >= 4 ? 4 : depth >= 2 ? 6 : 8;
       const cells = empty.length > maxCells ? evilSampleCells(b, empty, maxCells) : empty;
@@ -493,16 +512,18 @@
 
         if (expected < worstExpected) worstExpected = expected;
         if (worstExpected < ceiling * 0.85) return worstExpected;
+        if (timeUp()) break;
       }
       return worstExpected;
     }
 
     function getMaxDepth(b){
+      /*
       const emptyCount = availableCellsFlat(b).length;
       if (emptyCount <= 3) return 6;
       if (emptyCount <= 6) return 5;
-      if (emptyCount <= 10) return 4;
-      return 3;
+      if (emptyCount <= 10) return 4; */
+      return 10;
     }
 
     function evilCellPriority(b, r, c, profile){
@@ -544,6 +565,11 @@
       const EPS = 1e-6;
       let worstScore = Infinity, worstCell = null, worstVal = 2, worstImpact = -Infinity;
 
+      // Candidates are already ranked best-first (most disruptive cell
+      // heuristically first), so if the time budget runs out partway
+      // through, whatever's been evaluated so far is still a good pick --
+      // we just stop looking for something even better instead of
+      // leaving the move undecided.
       for (const [r,c] of candidates){
         const profile = profiles.get(r*SIZE+c);
         for (const val of [2,4]){
@@ -558,6 +584,7 @@
             worstVal = val; worstImpact = impact;
           }
         }
+        if (timeUp() && worstCell) break;
       }
       if (!worstCell){ const [r,c] = empty[0]; return { r, c, val: 2, score: 0 }; }
       return { r: worstCell[0], c: worstCell[1], val: worstVal, score: worstScore };
@@ -597,6 +624,13 @@
     function deviousSpawn(b){
       const empty = availableCellsFlat(b);
       if (!empty.length) return null;
+
+      // Fresh deadline for this spawn decision. Everything below (the
+      // expectiminimax recursion and the candidate loop) checks timeUp()
+      // and unwinds gracefully once it's passed, so this call always
+      // returns quickly instead of blocking the main thread until a
+      // fixed search depth finishes.
+      searchDeadline = performance.now() + MOVE_TIME_BUDGET_MS;
 
       const pair = findBlockablePair(b);
       if (pair){
