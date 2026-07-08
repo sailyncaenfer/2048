@@ -544,11 +544,11 @@ button.pill.secondary.active {
   will-change: transform;
 }
 
-.tile-size-tiny { font-size: 50px; } /* 1-2 digits */
-.tile-size-small { font-size: 44px; } /* 3 digits */
-.tile-size-medium { font-size: 34px; } /* 4 digits */
-.tile-size-large { font-size: 30px; } /* 5 digits */
-.tile-size-huge { font-size: 24px; } /* 6 digits */
+.tile-size-tiny { font-size: clamp(18px, 6.7vw, 50px); } /* 1-2 digits */
+.tile-size-small { font-size: clamp(16px, 5.9vw, 44px); } /* 3 digits */
+.tile-size-medium { font-size: clamp(12px, 4.5vw, 34px); } /* 4 digits */
+.tile-size-large { font-size: clamp(11px, 4vw, 30px); } /* 5 digits */
+.tile-size-huge { font-size: clamp(9px, 3.2vw, 24px); } /* 6 digits */
 
 .tile.block {
   background: #17140f;
