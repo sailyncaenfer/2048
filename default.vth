@@ -1,0 +1,244 @@
+{
+    "dark": {
+        "2": {
+            "--tile-text": "2",
+            "--tile-color": "#f9f6f2",
+            "--tile-background": "#043c24",
+            "--tile-shadow-color": "#00000000",
+            "--tile-outline-color": "#00000000"
+        },
+        "4": {
+            "--tile-text": "4",
+            "--tile-color": "#f9f6f2",
+            "--tile-background": "#06643d",
+            "--tile-shadow-color": "#00000000",
+            "--tile-outline-color": "#00000000"
+        },
+        "8": {
+            "--tile-text": "8",
+            "--tile-color": "#f9f6f2",
+            "--tile-background": "#1b955b",
+            "--tile-shadow-color": "#00000000",
+            "--tile-outline-color": "#00000000"
+        },
+        "16": {
+            "--tile-text": "16",
+            "--tile-color": "#f9f6f2",
+            "--tile-background": "#20c175",
+            "--tile-shadow-color": "#00000000",
+            "--tile-outline-color": "#00000000"
+        },
+        "32": {
+            "--tile-text": "32",
+            "--tile-color": "#f9f6f2",
+            "--tile-background": "#20c175",
+            "--tile-shadow-color": "#00000000",
+            "--tile-outline-color": "#00000000"
+        },
+        "64": {
+            "--tile-text": "64",
+            "--tile-color": "#f9f6f2",
+            "--tile-background": "#e4317f",
+            "--tile-shadow-color": "#00000000",
+            "--tile-outline-color": "#00000000"
+        },
+        "128": {
+            "--tile-text": "128",
+            "--tile-color": "#f9f6f2",
+            "--tile-background": "#9122ff",
+            "--tile-shadow-color": "#9122ff3d",
+            "--tile-outline-color": "#ffffff24"
+        },
+        "256": {
+            "--tile-text": "256",
+            "--tile-color": "#f9f6f2",
+            "--tile-background": "#8000ff",
+            "--tile-shadow-color": "#8000ff52",
+            "--tile-outline-color": "#ffffff30"
+        },
+        "512": {
+            "--tile-text": "512",
+            "--tile-color": "#f9f6f2",
+            "--tile-background": "#6600cc",
+            "--tile-shadow-color": "#6600cc66",
+            "--tile-outline-color": "#ffffff3d"
+        },
+        "1024": {
+            "--tile-text": "1024",
+            "--tile-color": "#f9f6f2",
+            "--tile-background": "#5500aa",
+            "--tile-shadow-color": "#5500aa7a",
+            "--tile-outline-color": "#ffffff4a"
+        },
+        "2048": {
+            "--tile-text": "2048",
+            "--tile-color": "#f9f6f2",
+            "--tile-background": "#45008a",
+            "--tile-shadow-color": "#45008a8f",
+            "--tile-outline-color": "#ffffff54"
+        },
+        "4096": {
+            "--tile-text": "4096",
+            "--tile-color": "#f9f6f2",
+            "--tile-background": "#005ec6",
+            "--tile-shadow-color": "#005ec68f",
+            "--tile-outline-color": "#ffffff30"
+        },
+        "8192": {
+            "--tile-text": "8192",
+            "--tile-color": "#f9f6f2",
+            "--tile-background": "#0079ff",
+            "--tile-shadow-color": "#0079ff8f",
+            "--tile-outline-color": "#ffffff3d"
+        },
+        "16384": {
+            "--tile-text": "16384",
+            "--tile-color": "#f9f6f2",
+            "--tile-background": "#00acff",
+            "--tile-shadow-color": "#00acff8f",
+            "--tile-outline-color": "#ffffff4a"
+        },
+        "32768": {
+            "--tile-text": "32768",
+            "--tile-color": "#f9f6f2",
+            "--tile-background": "#47c5ff",
+            "--tile-shadow-color": "#47c5ff8f",
+            "--tile-outline-color": "#ffffff54"
+        },
+        "65536": {
+            "--tile-text": "65536",
+            "--tile-color": "#f9f6f2",
+            "--tile-background": "#47c5ff",
+            "--tile-shadow-color": "#47c5ff8f",
+            "--tile-outline-color": "#ffffff54"
+        },
+        "super": {
+            "--tile-text": "131072",
+            "--tile-color": "#f9f6f2",
+            "--tile-background": "#47c5ff",
+            "--tile-shadow-color": "#47c5ff8f",
+            "--tile-outline-color": "#ffffff54"
+        }
+    },
+    "light": {
+        "2": {
+            "--tile-text": "2",
+            "--tile-color": "#776e65",
+            "--tile-background": "#eee4da",
+            "--tile-shadow-color": "#00000000",
+            "--tile-outline-color": "#00000000"
+        },
+        "4": {
+            "--tile-text": "4",
+            "--tile-color": "#776e65",
+            "--tile-background": "#ede0c8",
+            "--tile-shadow-color": "#00000000",
+            "--tile-outline-color": "#00000000"
+        },
+        "8": {
+            "--tile-text": "8",
+            "--tile-color": "#f9f6f2",
+            "--tile-background": "#f2b179",
+            "--tile-shadow-color": "#00000000",
+            "--tile-outline-color": "#00000000"
+        },
+        "16": {
+            "--tile-text": "16",
+            "--tile-color": "#f9f6f2",
+            "--tile-background": "#f59563",
+            "--tile-shadow-color": "#00000000",
+            "--tile-outline-color": "#00000000"
+        },
+        "32": {
+            "--tile-text": "32",
+            "--tile-color": "#f9f6f2",
+            "--tile-background": "#f67c5f",
+            "--tile-shadow-color": "#00000000",
+            "--tile-outline-color": "#00000000"
+        },
+        "64": {
+            "--tile-text": "64",
+            "--tile-color": "#f9f6f2",
+            "--tile-background": "#f65e3b",
+            "--tile-shadow-color": "#00000000",
+            "--tile-outline-color": "#00000000"
+        },
+        "128": {
+            "--tile-text": "128",
+            "--tile-color": "#f9f6f2",
+            "--tile-background": "#edcf72",
+            "--tile-shadow-color": "#f3d7743d",
+            "--tile-outline-color": "#ffffff24"
+        },
+        "256": {
+            "--tile-text": "256",
+            "--tile-color": "#f9f6f2",
+            "--tile-background": "#edcc61",
+            "--tile-shadow-color": "#f3d77451",
+            "--tile-outline-color": "#ffffff30"
+        },
+        "512": {
+            "--tile-text": "512",
+            "--tile-color": "#f9f6f2",
+            "--tile-background": "#edc850",
+            "--tile-shadow-color": "#f3d77479",
+            "--tile-outline-color": "#ffffff3d"
+        },
+        "1024": {
+            "--tile-text": "1024",
+            "--tile-color": "#f9f6f2",
+            "--tile-background": "#edc53f",
+            "--tile-shadow-color": "#f3d77479",
+            "--tile-outline-color": "#ffffff4a"
+        },
+        "2048": {
+            "--tile-text": "2048",
+            "--tile-color": "#f9f6f2",
+            "--tile-background": "#edc22e",
+            "--tile-shadow-color": "#f3d7748e",
+            "--tile-outline-color": "#ffffff54"
+        },
+        "4096": {
+            "--tile-text": "4096",
+            "--tile-color": "#f9f6f2",
+            "--tile-background": "#9100cf",
+            "--tile-shadow-color": "#df92f38e",
+            "--tile-outline-color": "#ffffff30"
+        },
+        "8192": {
+            "--tile-text": "8192",
+            "--tile-color": "#f9f6f2",
+            "--tile-background": "#590080",
+            "--tile-shadow-color": "#a858b78e",
+            "--tile-outline-color": "#ffffff3d"
+        },
+        "16384": {
+            "--tile-text": "16384",
+            "--tile-color": "#f9f6f2",
+            "--tile-background": "#36004d",
+            "--tile-shadow-color": "#713d7b8e",
+            "--tile-outline-color": "#ffffff4a"
+        },
+        "32768": {
+            "--tile-text": "32768",
+            "--tile-color": "#f9f6f2",
+            "--tile-background": "#000000",
+            "--tile-shadow-color": "#0000008f",
+            "--tile-outline-color": "#ffffff54"
+        },
+        "65536": {
+            "--tile-text": "65536",
+            "--tile-color": "#f9f6f2",
+            "--tile-background": "#000000",
+            "--tile-shadow-color": "#0000008f",
+            "--tile-outline-color": "#ffffff54"
+        },
+        "super": {
+            "--tile-text": "131072",
+            "--tile-color": "#f9f6f2",
+            "--tile-background": "#000000",
+            "--tile-shadow-color": "#0000008f",
+            "--tile-outline-color": "#ffffff54"
+        }
+    }
+}

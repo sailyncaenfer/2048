@@ -11,7 +11,16 @@
   const TILE_FG = ["var(--bg0)","var(--fg2)","var(--fg4)","var(--fg8)","var(--fg16)","var(--fg32)",
                     "var(--fg64)","var(--fg128)","var(--fg256)","var(--fg512)","var(--fg1024)","var(--fg2048)","var(--fg4096)",
                     "var(--fg8192)","var(--fg16384)","var(--fg32768)","var(--fg65536)","var(--fg131072)"];
+  const TILE_SHADOW = ["rgba(0,0,0,0)","var(--shadow2)","var(--shadow4)","var(--shadow8)","var(--shadow16)","var(--shadow32)",
+                    "var(--shadow64)","var(--shadow128)","var(--shadow256)","var(--shadow512)","var(--shadow1024)","var(--shadow2048)","var(--shadow4096)",
+                    "var(--shadow8192)","var(--shadow16384)","var(--shadow32768)","var(--shadow65536)","var(--shadow131072)"];
+  const TILE_OUTLINE = ["rgba(0,0,0,0)","var(--outline2)","var(--outline4)","var(--outline8)","var(--outline16)","var(--outline32)",
+                    "var(--outline64)","var(--outline128)","var(--outline256)","var(--outline512)","var(--outline1024)","var(--outline2048)","var(--outline4096)",
+                    "var(--outline8192)","var(--outline16384)","var(--outline32768)","var(--outline65536)","var(--outline131072)"];
   const MAX_TILE_IDX = TILE_BG.length - 1; // 131072
+
+  // Tile values a .vth theme (and the theme-tab preview) can customize.
+  const TILE_KEYS = [2,4,8,16,32,64,128,256,512,1024,2048,4096,8192,16384,32768,65536,131072];
 
   const MODS = [
     { key:"gravity",   name:"Gravity",   abbr:"GR", accent:"rgb(93,138,168)",
@@ -52,7 +61,9 @@
     mods: { gravity:false, invisible:false, magician:false, volatile:false, blocked:false, touch:false, coinflip:false, lockout:false, extrovert:false, expert:false },
     chaosMode: false,     // true once the "chaos" cheat code has been typed in the mods menu
     chaosActiveMod: null, // key of the single mod Chaos Mode currently has switched on
-    extrovertTracker: {}  // tile id -> { row, col, streak } for Extrovert's "stayed put" tracking
+    extrovertTracker: {}, // tile id -> { row, col, streak } for Extrovert's "stayed put" tracking
+    spawnStats: { twos: 0, fours: 0 }, // count of real (non-sentinel) tile spawns, by value
+    dirCounts: { 0:0, 1:0, 2:0, 3:0 }  // count of directional inputs received, keyed by DIR value
   };
 
   function loadBestScore() {
@@ -94,6 +105,8 @@
       chaosMode: state.chaosMode,
       chaosActiveMod: state.chaosActiveMod,
       extrovertTracker: state.extrovertTracker,
+      spawnStats: state.spawnStats,
+      dirCounts: state.dirCounts,
       nextTileId: nextTileId
     };
   }
@@ -127,6 +140,12 @@
     state.chaosMode = !!data.chaosMode;
     state.chaosActiveMod = data.chaosActiveMod || null;
     state.extrovertTracker = data.extrovertTracker && typeof data.extrovertTracker === "object" ? data.extrovertTracker : {};
+    state.spawnStats = data.spawnStats && typeof data.spawnStats === "object"
+      ? { twos: data.spawnStats.twos|0, fours: data.spawnStats.fours|0 }
+      : { twos: 0, fours: 0 };
+    state.dirCounts = data.dirCounts && typeof data.dirCounts === "object"
+      ? { 0: data.dirCounts[0]|0, 1: data.dirCounts[1]|0, 2: data.dirCounts[2]|0, 3: data.dirCounts[3]|0 }
+      : { 0:0, 1:0, 2:0, 3:0 };
 
     if (typeof data.nextTileId === "number") nextTileId = data.nextTileId;
 
@@ -176,10 +195,150 @@
     if (savedTheme === "dark") state.theme = "dark";
   } catch(e) {}
 
+  // ---------- custom tile theme (.vth) ----------
+  // Snapshot the CSS file's own light/dark tile colors *before* any custom
+  // theme gets applied, so "Reset to Default" always has something true
+  // to fall back to, and partial custom themes (e.g. only a few values
+  // overridden) can be layered on top of the rest.
+  function snapshotBuiltinTheme(mode){
+    const prevAttr = document.documentElement.getAttribute("data-theme");
+    document.documentElement.setAttribute("data-theme", mode);
+    const cs = getComputedStyle(document.documentElement);
+    const out = {};
+    TILE_KEYS.forEach(v => {
+      out[v] = {
+        bg: cs.getPropertyValue(`--bg${v}`).trim(),
+        fg: cs.getPropertyValue(`--fg${v}`).trim(),
+        shadow: cs.getPropertyValue(`--shadow${v}`).trim() || "rgba(0,0,0,0)",
+        outline: cs.getPropertyValue(`--outline${v}`).trim() || "rgba(0,0,0,0)",
+        text: String(v)
+      };
+    });
+    if (prevAttr === null) document.documentElement.removeAttribute("data-theme");
+    else document.documentElement.setAttribute("data-theme", prevAttr);
+    return out;
+  }
+
+  const DEFAULT_THEME = {
+    light: snapshotBuiltinTheme("light"),
+    dark: snapshotBuiltinTheme("dark")
+  };
+
+  // { light:{2:{bg,fg,shadow,outline,text}, ...}, dark:{...} }, only the
+  // values a person has actually overridden are present here. Anything not
+  // in here falls back to DEFAULT_THEME.
+  state.customTheme = null;
+
+  // Converts a .vth file's JSON (per-mode objects keyed by "2".."65536"/"super",
+  // each holding --tile-background / --tile-color / --tile-shadow-color /
+  // --tile-outline-color / --tile-text) into our internal shape.
+  function vthToInternal(vth){
+    if (!vth || typeof vth !== "object") return null;
+    const out = {};
+    ["light","dark"].forEach(mode => {
+      const src = vth[mode];
+      if (!src || typeof src !== "object") return;
+      const modeOut = {};
+      Object.keys(src).forEach(key => {
+        const v = key === "super" ? 131072 : parseInt(key, 10);
+        if (!TILE_KEYS.includes(v)) return;
+        const entry = src[key] || {};
+        modeOut[v] = {
+          bg: entry["--tile-background"] || null,
+          fg: entry["--tile-color"] || null,
+          shadow: entry["--tile-shadow-color"] || null,
+          outline: entry["--tile-outline-color"] || null,
+          text: (typeof entry["--tile-text"] === "string" && entry["--tile-text"]) || null
+        };
+      });
+      if (Object.keys(modeOut).length) out[mode] = modeOut;
+    });
+    return Object.keys(out).length ? out : null;
+  }
+
+  // Converts our internal (possibly partial) custom theme + defaults back
+  // into a full, portable .vth JSON structure for export.
+  function internalToVth(){
+    const vth = {};
+    ["light","dark"].forEach(mode => {
+      const eff = getEffectiveTheme(mode);
+      const modeOut = {};
+      TILE_KEYS.forEach(v => {
+        const key = v === 131072 ? "super" : String(v);
+        modeOut[key] = {
+          "--tile-text": eff[v].text,
+          "--tile-color": eff[v].fg,
+          "--tile-background": eff[v].bg,
+          "--tile-shadow-color": eff[v].shadow,
+          "--tile-outline-color": eff[v].outline
+        };
+      });
+      vth[mode] = modeOut;
+    });
+    return vth;
+  }
+
+  function getEffectiveTheme(mode){
+    const base = DEFAULT_THEME[mode];
+    const custom = state.customTheme && state.customTheme[mode];
+    const eff = {};
+    TILE_KEYS.forEach(v => {
+      const b = base[v];
+      const c = custom && custom[v];
+      eff[v] = {
+        bg: (c && c.bg) || b.bg,
+        fg: (c && c.fg) || b.fg,
+        shadow: (c && c.shadow) || b.shadow,
+        outline: (c && c.outline) || b.outline,
+        text: (c && c.text) || b.text
+      };
+    });
+    return eff;
+  }
+
+  // Live lookup used while rendering tiles: value -> display text, kept in
+  // sync with whichever theme (default or custom) is currently active.
+  let currentTileText = {};
+
+  function applyThemeVars(){
+    const eff = getEffectiveTheme(state.theme);
+    TILE_KEYS.forEach(v => {
+      document.documentElement.style.setProperty(`--bg${v}`, eff[v].bg);
+      document.documentElement.style.setProperty(`--fg${v}`, eff[v].fg);
+      document.documentElement.style.setProperty(`--shadow${v}`, eff[v].shadow);
+      document.documentElement.style.setProperty(`--outline${v}`, eff[v].outline);
+      currentTileText[v] = eff[v].text;
+    });
+  }
+
+  const CUSTOM_THEME_KEY = "2048modlab_customtheme";
+
+  function saveCustomTheme(){
+    try {
+      if (state.customTheme) localStorage.setItem(CUSTOM_THEME_KEY, JSON.stringify(state.customTheme));
+      else localStorage.removeItem(CUSTOM_THEME_KEY);
+    } catch(e) {}
+  }
+
+  try {
+    const raw = localStorage.getItem(CUSTOM_THEME_KEY);
+    if (raw){
+      const parsed = JSON.parse(raw);
+      const sampleMode = parsed && (parsed.light || parsed.dark);
+      const sampleEntry = sampleMode && Object.values(sampleMode)[0];
+      // Already-internal storage (has bg/fg keys) vs a raw .vth file someone saved earlier.
+      state.customTheme = (sampleEntry && ("bg" in sampleEntry || "fg" in sampleEntry))
+        ? parsed
+        : vthToInternal(parsed);
+    }
+  } catch(e) { state.customTheme = null; }
+
   function applyTheme(){
     document.documentElement.setAttribute("data-theme", state.theme);
+    applyThemeVars();
   }
   applyTheme();
+
 
   // ---------- helpers ----------
 
@@ -798,6 +957,7 @@
     if (!chosen) return null;
 
     state.board[chosen.r][chosen.c] = { id: nextTileId++, value: chosen.val };
+    if (chosen.val === 4) state.spawnStats.fours++; else state.spawnStats.twos++;
     return chosen.r*SIZE + chosen.c;
   }
 
@@ -823,6 +983,8 @@
     state.magicLog = [];
     state.lockedDir = null;
     state.extrovertTracker = {};
+    state.spawnStats = { twos: 0, fours: 0 };
+    state.dirCounts = { 0:0, 1:0, 2:0, 3:0 };
 
     const s1 = randomSpawn();
     const s2 = randomSpawn();
@@ -847,6 +1009,7 @@
     const val = Math.random() < (state.mods.coinflip ? 0.5 : 0.1) ? 4 : 2;
     const [r,c] = cells[Math.floor(Math.random()*cells.length)];
     state.board[r][c] = { id: nextTileId++, value: val };
+    if (val === 4) state.spawnStats.fours++; else state.spawnStats.twos++;
     return r*SIZE + c;
   }
 
@@ -1270,6 +1433,7 @@
   function handleMove(direction){
     if (state.gameOver) return;
     if (modalOverlay.classList.contains("show")) return;
+    if (infoModalOverlay.classList.contains("show")) return;
     if (state.mods.lockout && state.lockedDir === direction) return;
 
     const before = cloneBoard(state.board);
@@ -1284,6 +1448,8 @@
     const changed = !boardsEqual(before, state.board);
 
     if (changed){
+      state.dirCounts[direction] = (state.dirCounts[direction] || 0) + 1;
+
       if (state.mods.magician){
         processMagic(mergeValues);
         
@@ -1347,6 +1513,7 @@
   const overlaySubEl = document.getElementById("overlaySub");
   const activeModsRow = document.getElementById("activeModsRow");
   const modalOverlay = document.getElementById("modalOverlay");
+  const infoModalOverlay = document.getElementById("infoModalOverlay");
   const magicLogEl = document.getElementById("magicLog");
   const magicLogListEl = document.getElementById("magicLogList");
   const extrovertLogEl = document.getElementById("extrovertLog");
@@ -1443,18 +1610,58 @@
     anim.raf = requestAnimationFrame(frame);
   }
 
-  function getFontSizeClass(value) {
-    if (value < 100) return "tile-size-tiny";    // 1-3 digits
-    if (value < 1000) return "tile-size-small";    // 1-3 digits
-    if (value < 10000) return "tile-size-medium";  // 4 digits
-    if (value < 100000) return "tile-size-large";  // 5 digits
-    return "tile-size-huge";                       // 6+ digits
+  // Dynamic font sizing: scales down as the display text gets longer, so a
+  // custom-themed tile with a word or emoji label (instead of a plain
+  // number) still fits and stays readable, without needing preset classes
+  // tied to digit counts.
+  function computeTileFontSize(text){
+    const len = String(text).length;
+    if (len <= 2) return "clamp(18px, 6.7vw, 50px)";
+    if (len === 3) return "clamp(16px, 5.9vw, 44px)";
+    if (len === 4) return "clamp(12px, 4.5vw, 34px)";
+    if (len === 5) return "clamp(11px, 4vw, 30px)";
+    if (len === 6) return "clamp(9px, 3.2vw, 24px)";
+    const scale = Math.max(0.28, 6 / len);
+    const minPx = Math.max(7, Math.round(9 * scale));
+    const vw = Math.max(1.8, 3.2 * scale).toFixed(2);
+    const maxPx = Math.max(12, Math.round(24 * scale));
+    return `clamp(${minPx}px, ${vw}vw, ${maxPx}px)`;
   }
 
   function styleTileContent(el, cellData, isMagic, magicVal){
-    el.classList.remove("block", "magic", "tile-size-small", "tile-size-medium", "tile-size-large", "tile-size-huge");
+    el.classList.remove("block", "magic");
     el.style.background = "";
     el.style.color = "";
+    el.style.boxShadow = "";
+    el.style.textShadow = "";
+    el.style.outline = "";
+
+    // 1. Ensure the container centers content
+    el.style.display = "flex";
+    el.style.alignItems = "center";
+    el.style.justifyContent = "center";
+    el.style.padding = "10px";
+    el.style.boxSizing = "border-box"; // Keeps the padding inside the tile
+    el.style.textAlign = "center";
+    el.style.wordBreak = "break-word"; // Ensures long text wraps correctly
+
+    el.style.lineHeight = "1.2";
+
+    // 2. Define the text logic (skipped for magic tiles: their content is
+    // a canvas + counter label, not plain text, and is built/updated in
+    // the isMagic branch below. Writing plain text here first would wipe
+    // out that canvas/label on every re-render, since el.textContent
+    // clears all child nodes -- including ones already correctly built.)
+    if (!isMagic){
+      const text = String(cellData.value);
+      el.textContent = text;
+
+      // 3. Define font size calculation
+      // Base size logic: scale down if the text is long,
+      // but use Math.max(20, ...) to enforce the minimum.
+      const baseSize = Math.max(45 - text.length * 2, 20);
+      el.style.fontSize = Math.max(20, baseSize) + "px";
+    }
 
     if (isMagic){
       el.classList.add("magic");
@@ -1485,14 +1692,20 @@
     if (cellData.value === 1){
       el.classList.add("block");
       el.textContent = "VERY ANNOYING BLOCK!";
+      // The generic font-size calculation above (based on the 1-character
+      // string "1") set an inline font-size that would override the small
+      // clamp() defined for .tile.block in CSS. Clear it so the CSS rule
+      // (sized to actually fit "VERY ANNOYING BLOCK!" inside the tile) applies.
+      el.style.fontSize = "";
     } else {
       const idx = cellData.value >= 131072 ? MAX_TILE_IDX : Math.log2(cellData.value);
+      const tileValue = TILE_KEYS[idx - 1];
+      const displayText = (currentTileText[tileValue]) || String(cellData.value);
       el.style.background = TILE_BG[idx];
       el.style.color = TILE_FG[idx];
-      el.textContent = String(cellData.value);
-      
-      // ADD THIS LINE
-      el.classList.add(getFontSizeClass(cellData.value));
+      el.style.boxShadow = `inset 0 0 0 2px ${TILE_OUTLINE[idx]}, 0 0 14px 3px ${TILE_SHADOW[idx]}`;
+      el.style.fontSize = computeTileFontSize(displayText);
+      el.textContent = displayText;
     }
   }
 
@@ -1543,6 +1756,14 @@
 
         el.style.width = cell + "px";
         el.style.height = cell + "px";
+
+        el.style.display = "flex";
+        el.style.alignItems = "center";
+        el.style.justifyContent = "center";
+        el.style.padding = "10px";
+        el.style.boxSizing = "border-box";
+        el.style.textAlign = "center";
+
         styleTileContent(el, cellData, isMagic, magicVal);
 
         if (isNew){
@@ -1622,6 +1843,145 @@
       lockoutGlowEls[dir].classList.toggle("active", activeDir !== null && Number(dir) === activeDir);
     }
   }
+
+  // ---------- expected score ----------
+  // a(x) = 0                                                     for x = 0
+  // a(x) = ((log2(x)-1)*x)^0.9 + ((log2(x)-2)*x)^0.1              for x > 0
+  // Fractional powers of a negative base are undefined over the reals, so
+  // the sign is pulled out and applied afterward (sign(v) * |v|^p) rather
+  // than letting Math.pow silently return NaN.
+  function signedPow(v, p){
+    if (v === 0) return 0;
+    return Math.sign(v) * Math.pow(Math.abs(v), p);
+  }
+
+  function expectedTileScore(x) {
+      if (!x || x <= 0) return 0;
+      const L = Math.log2(x);
+      return ((L - 1) * x * 0.9) + ((L - 2) * x * 0.1);
+  }
+
+  // Sums a(x) over every real numbered tile on the board. Sentinel tiles
+  // (Blocked's obstacle, value 1, and Magician's TV-static block, value -1)
+  // aren't real 2048 tiles, so they're skipped rather than fed into a(x).
+  function boardExpectedScore(){
+    let total = 0;
+    for (let r=0;r<SIZE;r++){
+      for (let c=0;c<SIZE;c++){
+        const cell = state.board[r][c];
+        if (!cell) continue;
+        if (cell.value === 1 || cell.value === -1) continue;
+        total += expectedTileScore(cell.value);
+      }
+    }
+    return total;
+  }
+
+  // ---------- info modal ----------
+  const infoBtn = document.getElementById("infoBtn");
+  const infoModalClose = document.getElementById("infoModalClose");
+  const miniBoardEl = document.getElementById("miniBoard");
+  const statGridSpawnsEl = document.getElementById("statGridSpawns");
+  const statGridDirsEl = document.getElementById("statGridDirs");
+  const statGridScoreEl = document.getElementById("statGridScore");
+
+  function statRow(label, value){
+    return `<div class="stat-row"><span class="stat-label">${label}</span><span class="stat-value">${value}</span></div>`;
+  }
+
+  function pct(n, d){
+    if (!d) return "0%";
+    return (n / d * 100).toFixed(1) + "%";
+  }
+
+  function renderMiniBoard() {
+    let html = "";
+    for (let r = 0; r < SIZE; r++) {
+      for (let c = 0; c < SIZE; c++) {
+        const cell = state.board[r][c];
+        const isMagic = state.mods.magician && state.magicCounter[r][c] !== 0;
+
+        // 1. Always show magic sentinel tiles
+        if (isMagic) {
+          html += `<div class="mini-cell mini-magic">${state.magicCounter[r][c]}</div>`;
+          continue;
+        }
+
+        // 2. Check for Invisible mod:
+        // If invisible is active, only show the cell if it is in spawnLocs.
+        // spawnLocs stores flat indices (r*SIZE+c), matching how the main
+        // board's renderTiles() tracks them - NOT [r,c] pairs.
+        const isNewlySpawned = state.spawnLocs.includes(r * SIZE + c);
+        if (state.mods.invisible && !isNewlySpawned && !state.gameOver  ) {
+          html += `<div class="mini-cell"></div>`;
+          continue;
+        }
+
+        // 3. Render standard tiles or empty cells
+        if (!cell || cell.value <= 0) {
+          html += `<div class="mini-cell"></div>`;
+        } else if (cell.value === 1) {
+          html += `<div class="mini-cell mini-block">&#9632;</div>`;
+        } else {
+          const idx = cell.value >= 131072 ? MAX_TILE_IDX : Math.log2(cell.value);
+          const bg = TILE_BG[idx] || "var(--bg0)";
+          const fg = TILE_FG[idx] || "var(--fg2)";
+          html += `<div class="mini-cell" style="background:${bg}; color:${fg};">${cell.value}</div>`;
+        }
+      }
+    }
+    miniBoardEl.innerHTML = html;
+  }
+
+  function renderInfoModal(){
+    renderMiniBoard();
+
+    // ---- moves ----
+    const dc = state.dirCounts;
+    const totalDirs = (dc[DIR.UP]||0) + (dc[DIR.DOWN]||0) + (dc[DIR.LEFT]||0) + (dc[DIR.RIGHT]||0);
+    statGridDirsEl.innerHTML =
+      statRow("Up", `${dc[DIR.UP]||0} (${pct(dc[DIR.UP]||0, totalDirs)})`) +
+      statRow("Down", `${dc[DIR.DOWN]||0} (${pct(dc[DIR.DOWN]||0, totalDirs)})`) +
+      statRow("Left", `${dc[DIR.LEFT]||0} (${pct(dc[DIR.LEFT]||0, totalDirs)})`) +
+      statRow("Right", `${dc[DIR.RIGHT]||0} (${pct(dc[DIR.RIGHT]||0, totalDirs)})`) +
+      statRow("Total moves", totalDirs);
+
+    // ---- spawns ----
+    const twos = state.spawnStats.twos, fours = state.spawnStats.fours;
+    const totalSpawns = twos + fours;
+    const fourRateLabel = state.mods.expert
+      ? "Adversarial (variable)"
+      : (state.mods.coinflip ? "50%" : "10%");
+
+    statGridSpawnsEl.innerHTML =
+      statRow("2 spawns", twos) +
+      statRow("4 spawns", fours) +
+      statRow("Total spawns", totalSpawns) +
+      statRow("Current 4 spawn rate", fourRateLabel) +
+      statRow("Observed 4 spawn rate", pct(fours, totalSpawns));
+
+    // ---- expected score ----
+    const expected = boardExpectedScore();
+    const diff = state.score - expected;
+    const ratio = expected !== 0 ? pct(state.score, expected) : "N/A";
+    statGridScoreEl.innerHTML =
+      statRow("Current score", state.score) +
+      statRow("Expected score", expected.toFixed(2)) +
+      statRow("Difference", diff.toFixed(2)) +
+      statRow("Ratio", ratio);
+  }
+
+  function openInfoModal(){
+    renderInfoModal();
+    infoModalOverlay.classList.add("show");
+  }
+  function closeInfoModal(){ infoModalOverlay.classList.remove("show"); }
+
+  infoBtn.addEventListener("click", openInfoModal);
+  infoModalClose.addEventListener("click", closeInfoModal);
+  infoModalOverlay.addEventListener("click", (e) => {
+    if (e.target === infoModalOverlay) closeInfoModal();
+  });
 
   // Shows every currently-tracked biggest tile, its cell, and how many more
   // moves it can sit still before Extrovert teleports it home. Visible
@@ -1743,8 +2103,13 @@
   };
 
   window.addEventListener("keydown", (e) => {
+    if (e.target.tagName === 'INPUT') return;
     if (e.key === "Escape" && modalOverlay.classList.contains("show")){
       closeModal();
+      return;
+    }
+    if (e.key === "Escape" && infoModalOverlay.classList.contains("show")){
+      closeInfoModal();
       return;
     }
     if (e.key in KEY_DIR){
@@ -1786,6 +2151,7 @@
   
     // Add this block to handle 'R' for restart
     if (e.key === "r" || e.key === "R") {
+      if (e.target.tagName === 'INPUT') return  
       newGame();
       return;
     }
@@ -1924,6 +2290,199 @@
       try { localStorage.setItem("2048modlab_theme", state.theme); } catch(e) {}
     });
   });
+
+  // ---------- theme tab: custom .vth tile theme upload, editing + preview ----------
+  const vthFileInput = document.getElementById("vthFileInput");
+  const resetThemeBtn = document.getElementById("resetThemeBtn");
+  const exportThemeBtn = document.getElementById("exportThemeBtn");
+  const themeStatusEl = document.getElementById("themeStatus");
+  const themeSwatchLightEl = document.getElementById("themeSwatchLight");
+  const themeSwatchDarkEl = document.getElementById("themeSwatchDark");
+  const themeEditorEl = document.getElementById("themeEditor");
+  const themeEditorTitleEl = document.getElementById("themeEditorTitle");
+  const editTileText = document.getElementById("editTileText");
+  const editTileBg = document.getElementById("editTileBg");
+  const editTileFg = document.getElementById("editTileFg");
+  const editTileShadow = document.getElementById("editTileShadow");
+  const editTileOutline = document.getElementById("editTileOutline");
+  const editClearBtn = document.getElementById("editClearBtn");
+  const editCancelBtn = document.getElementById("editCancelBtn");
+
+  let editingCell = null; // { mode, value } while the editor panel is open
+
+  // Preview swatches are much smaller than real board tiles, and their
+  // container is tiny relative to the viewport, so vw units (used for real
+  // tiles) would all collapse to roughly the same size here. Container
+  // query units (cqi = 1% of the swatch's own width) instead reproduce the
+  // same shrink-as-text-grows shape as computeTileFontSize, just scaled
+  // down to fit a swatch about a sixth the size of a real tile.
+  function computeSwatchFontSize(text){
+    const len = String(text).length;
+    if (len <= 2) return "clamp(8px, 42cqi, 16px)";
+    if (len === 3) return "clamp(7px, 36cqi, 14px)";
+    if (len === 4) return "clamp(6px, 28cqi, 12px)";
+    if (len === 5) return "clamp(6px, 24cqi, 11px)";
+    if (len === 6) return "clamp(5px, 20cqi, 10px)";
+    const scale = Math.max(0.3, 6 / len);
+    const minPx = Math.max(4, Math.round(5 * scale));
+    const cqi = Math.max(8, 20 * scale).toFixed(2);
+    const maxPx = Math.max(6, Math.round(9 * scale));
+    return `clamp(${minPx}px, ${cqi}cqi, ${maxPx}px)`;
+  }
+
+  function renderThemeSwatchRow(container, mode){
+    const eff = getEffectiveTheme(mode);
+    container.innerHTML = "";
+    TILE_KEYS.forEach(v => {
+      const t = eff[v];
+      const sw = document.createElement("div");
+      sw.className = "theme-swatch";
+      sw.style.background = t.bg;
+      sw.style.color = t.fg;
+      sw.style.boxShadow = `inset 0 0 0 1px rgba(255,255,255,0.20), inset 0 0 0 2px ${t.outline}, 0 0 8px 2px ${t.shadow}`;
+      sw.style.fontSize = computeSwatchFontSize(t.text);
+      sw.textContent = t.text;
+      sw.title = `Click to customize ${v} (${mode} mode)`;
+      sw.addEventListener("click", () => openCellEditor(mode, v));
+      container.appendChild(sw);
+    });
+  }
+
+  function renderThemePreview(){
+    renderThemeSwatchRow(themeSwatchLightEl, "light");
+    renderThemeSwatchRow(themeSwatchDarkEl, "dark");
+  }
+
+  function setThemeStatus(text, isError){
+    themeStatusEl.textContent = text;
+    themeStatusEl.classList.toggle("error", !!isError);
+  }
+
+  function openCellEditor(mode, value){
+    editingCell = { mode, value };
+    const eff = getEffectiveTheme(mode)[value];
+    themeEditorTitleEl.textContent = `Editing ${value} — ${mode === "light" ? "Light" : "Dark"} mode`;
+    editTileText.value = eff.text;
+    editTileBg.value = eff.bg;
+    editTileFg.value = eff.fg;
+    editTileShadow.value = eff.shadow;
+    editTileOutline.value = eff.outline;
+    themeEditorEl.hidden = false;
+    themeEditorEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  function closeCellEditor(){
+    editingCell = null;
+    themeEditorEl.hidden = true;
+  }
+
+  // Reads whatever's currently in the editor fields and commits it straight
+  // to the custom theme — called on every keystroke/change so edits are
+  // saved continuously as the person types, with no separate "Save" step.
+  function commitEditorValues(){
+    if (!editingCell) return;
+    const { mode, value } = editingCell;
+    if (!state.customTheme) state.customTheme = {};
+    if (!state.customTheme[mode]) state.customTheme[mode] = {};
+    state.customTheme[mode][value] = {
+      text: editTileText.value.trim() || String(value),
+      bg: editTileBg.value.trim() || null,
+      fg: editTileFg.value.trim() || null,
+      shadow: editTileShadow.value.trim() || null,
+      outline: editTileOutline.value.trim() || null
+    };
+    saveCustomTheme();
+    applyThemeVars();
+    renderThemePreview();
+    setThemeStatus(`Customized tile ${value} (${mode} mode) — saved.`);
+  }
+
+  [editTileText, editTileBg, editTileFg, editTileShadow, editTileOutline].forEach(input => {
+    input.addEventListener("input", commitEditorValues);
+  });
+
+  editClearBtn.addEventListener("click", () => {
+    if (!editingCell) return;
+    const { mode, value } = editingCell;
+    if (state.customTheme && state.customTheme[mode]){
+      delete state.customTheme[mode][value];
+      if (!Object.keys(state.customTheme[mode]).length) delete state.customTheme[mode];
+      if (!Object.keys(state.customTheme).length) state.customTheme = null;
+    }
+    saveCustomTheme();
+    applyThemeVars();
+    renderThemePreview();
+    setThemeStatus(`Reverted tile ${value} (${mode} mode) to default.`);
+    closeCellEditor();
+  });
+
+  // Changes are already saved live as you type, so this button just closes
+  // the panel — there's nothing left to discard.
+  editCancelBtn.addEventListener("click", closeCellEditor);
+
+  renderThemePreview();
+
+  vthFileInput.addEventListener("change", () => {
+    const file = vthFileInput.files && vthFileInput.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      let parsed;
+      try {
+        parsed = JSON.parse(reader.result);
+      } catch(e) {
+        setThemeStatus("Couldn't read that file — make sure it's a valid .vth/JSON theme.", true);
+        vthFileInput.value = "";
+        return;
+      }
+
+      const internal = vthToInternal(parsed);
+      if (!internal){
+        setThemeStatus("That file didn't have any recognizable tile colors in it.", true);
+        vthFileInput.value = "";
+        return;
+      }
+
+      state.customTheme = internal;
+      saveCustomTheme();
+      applyThemeVars();
+      renderThemePreview();
+      closeCellEditor();
+      setThemeStatus(`Loaded custom theme: ${file.name}`);
+      vthFileInput.value = "";
+    };
+    reader.onerror = () => {
+      setThemeStatus("Couldn't read that file.", true);
+      vthFileInput.value = "";
+    };
+    reader.readAsText(file);
+  });
+
+  resetThemeBtn.addEventListener("click", () => {
+    state.customTheme = null;
+    saveCustomTheme();
+    applyThemeVars();
+    renderThemePreview();
+    closeCellEditor();
+    setThemeStatus("Using default theme.");
+  });
+
+  exportThemeBtn.addEventListener("click", () => {
+    const vth = internalToVth();
+    const blob = new Blob([JSON.stringify(vth, null, 4)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "my-2048-theme.vth";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    setThemeStatus("Exported current theme to my-2048-theme.vth.");
+  });
+
+  if (state.customTheme) setThemeStatus("Using a loaded custom theme.");
 
   // ---------- touch controls setting ----------
   const tapControlsSegment = document.getElementById("tapControlsSegment");

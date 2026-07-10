@@ -10,9 +10,14 @@
 <div class="loss-flash" id="lossFlash"></div>
 <div class="app">
   <header class="title">
-    <button class="settings-btn" id="settingsBtn" type="button" aria-label="Open mods and settings">
-      <span class="gear">&#9881;</span> Mods &amp; Settings
-    </button>
+    <div class="header-top-row">
+      <button class="info-btn" id="infoBtn" type="button" aria-label="Open board info and statistics">
+        <span class="info-icon">i</span>
+      </button>
+      <button class="settings-btn" id="settingsBtn" type="button" aria-label="Open mods and settings">
+        <span class="gear">&#9881;</span> Mods &amp; Settings
+      </button>
+    </div>
     <h1 id="titleH1">2048 <span style="font-weight:400; font-size:0.55em; color:rgb(140,128,112);"></span></h1>
     <p>2048 with like mods and stuff idk</p>
   </header>
@@ -77,6 +82,7 @@
       <div class="modal-tabs" id="modalTabs">
         <button class="modal-tab-btn active" data-tab="mods" type="button">Mods</button>
         <button class="modal-tab-btn" data-tab="settings" type="button">Settings</button>
+        <button class="modal-tab-btn" data-tab="theme" type="button">Theme</button>
       </div>
       <div class="modal-body">
         <section class="tab-panel" data-panel="mods">
@@ -114,6 +120,89 @@
               <button class="seg-btn" data-val="off" type="button">Off</button>
             </div>
           </section>
+        </section>
+
+        <section class="tab-panel" data-panel="theme" hidden>
+          <section class="theme-tab-section">
+            <h3>Tile Theme</h3>
+            <p class="sub">Upload a .vth theme file to recolor the tiles. Themes can define separate colors (and optional glow) for Light and Dark mode.</p>
+            <div class="theme-upload-row">
+              <label class="pill theme-file-label" for="vthFileInput">Import .vth Theme</label>
+              <input type="file" id="vthFileInput" accept=".vth,.json,application/json">
+              <button class="pill secondary" id="exportThemeBtn" type="button">Export Theme</button>
+              <button class="pill secondary" id="resetThemeBtn" type="button">Reset to Default</button>
+            </div>
+            <p class="theme-status" id="themeStatus">Using default theme.</p>
+
+            <div class="theme-preview">
+              <div class="theme-preview-row">
+                <h4 class="theme-preview-title">Light Mode Preview — tap a tile to customize it</h4>
+                <div class="theme-swatch-grid" id="themeSwatchLight"></div>
+              </div>
+              <div class="theme-preview-row">
+                <h4 class="theme-preview-title">Dark Mode Preview — tap a tile to customize it</h4>
+                <div class="theme-swatch-grid" id="themeSwatchDark"></div>
+              </div>
+            </div>
+
+            <div class="theme-editor" id="themeEditor" hidden>
+              <h4 id="themeEditorTitle">Editing tile</h4>
+              <label class="theme-editor-field">
+                <span>Display text</span>
+                <input type="text" id="editTileText" maxlength="24">
+              </label>
+              <label class="theme-editor-field">
+                <span>Background</span>
+                <input type="text" id="editTileBg" placeholder="#rrggbb or rgb(...)">
+              </label>
+              <label class="theme-editor-field">
+                <span>Text color</span>
+                <input type="text" id="editTileFg" placeholder="#rrggbb or rgb(...)">
+              </label>
+              <label class="theme-editor-field">
+                <span>Glow color</span>
+                <input type="text" id="editTileShadow" placeholder="#rrggbbaa or rgba(...)">
+              </label>
+              <label class="theme-editor-field">
+                <span>Outline color</span>
+                <input type="text" id="editTileOutline" placeholder="#rrggbbaa or rgba(...)">
+              </label>
+              <div class="theme-editor-actions">
+                <button class="pill secondary" id="editClearBtn" type="button">Revert to Default</button>
+                <button class="pill" id="editCancelBtn" type="button">Done</button>
+              </div>
+            </div>
+          </section>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="infoModalOverlay">
+    <div class="modal info-modal" role="dialog" aria-modal="true" aria-label="Board info and statistics">
+      <div class="modal-header">
+        <h2>Board Info</h2>
+        <button class="modal-close" id="infoModalClose" type="button" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <section class="info-section">
+          <h3>Board State</h3>
+          <div class="mini-board" id="miniBoard"></div>
+        </section>
+
+        <section class="info-section">
+          <h3>Spawns</h3>
+          <div class="stat-grid" id="statGridSpawns"></div>
+        </section>
+
+        <section class="info-section">
+          <h3>Moves</h3>
+          <div class="stat-grid" id="statGridDirs"></div>
+        </section>
+
+        <section class="info-section">
+          <h3>Expected Score</h3>
+          <div class="stat-grid" id="statGridScore"></div>
         </section>
       </div>
     </div>
