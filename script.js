@@ -32,11 +32,13 @@
     { key:"invisible", name:"Invisible", abbr:"IV", accent:"rgb(150,140,140)",
       desc:"Only newly spawned tiles are shown." },
     { key:"coinflip",  name:"Coin Flip", abbr:"CF", accent:"rgb(212,175,55)",
-      desc:"2's and 4's are equally likely to spawn." },
+      desc:"Spawnable tiles are equally likely to spawn." },
+    { key:"greed",     name:"Greed",     abbr:"GD", accent:"rgb(60, 160, 80)",
+      desc:"8's can also spawn: 2 (85%), 4 (10%), 8 (5%)." },
     { key:"volatile",  name:"Volatile",  abbr:"VL", accent:"rgb(252, 76, 228)",
       desc:"Two new tiles spawn after every move instead of one." },
     { key:"extrovert", name:"Extrovert", abbr:"XT", accent:"rgb(255, 140, 66)",
-      desc:"If the biggest tile sits in the same spot for 7 moves, it swaps with the tile in a fixed spot toward the center. In Chaos Mode this tracking always runs in the background, even while Extrovert isn't the active mod." },
+      desc:"If the biggest tile sits in the same spot for 7 moves, it swaps with the tile in a fixed spot toward the center." },
     { key:"lockout",   name:"Lockout",   abbr:"LO", accent:"rgb(255, 79, 79)",
       desc:"A random direction is disabled every move." },
     { key:"magician",  name:"Magician",  abbr:"MG", accent:"rgb(169, 54, 160)",
@@ -56,13 +58,14 @@
     magicLog: [],   // history of merge values while Magician is active, newest first
     animationsEnabled: true,
     tapControlsEnabled: false,
+    confirmRestartEnabled: false,
     theme: "light",
     lockedDir: null, // direction disabled this turn while Lockout is active
-    mods: { gravity:false, invisible:false, magician:false, volatile:false, blocked:false, touch:false, coinflip:false, lockout:false, extrovert:false, expert:false },
+    mods: { gravity:false, invisible:false, magician:false, volatile:false, blocked:false, touch:false, coinflip:false, lockout:false, extrovert:false, expert:false, greed:false },
     chaosMode: false,     // true once the "chaos" cheat code has been typed in the mods menu
     chaosActiveMod: null, // key of the single mod Chaos Mode currently has switched on
     extrovertTracker: {}, // tile id -> { row, col, streak } for Extrovert's "stayed put" tracking
-    spawnStats: { twos: 0, fours: 0 }, // count of real (non-sentinel) tile spawns, by value
+    spawnStats: { twos: 0, fours: 0, eights: 0 }, // count of real (non-sentinel) tile spawns, by value
     dirCounts: { 0:0, 1:0, 2:0, 3:0 }  // count of directional inputs received, keyed by DIR value
   };
 
@@ -141,8 +144,8 @@
     state.chaosActiveMod = data.chaosActiveMod || null;
     state.extrovertTracker = data.extrovertTracker && typeof data.extrovertTracker === "object" ? data.extrovertTracker : {};
     state.spawnStats = data.spawnStats && typeof data.spawnStats === "object"
-      ? { twos: data.spawnStats.twos|0, fours: data.spawnStats.fours|0 }
-      : { twos: 0, fours: 0 };
+      ? { twos: data.spawnStats.twos|0, fours: data.spawnStats.fours|0, eights: data.spawnStats.eights|0 }
+      : { twos: 0, fours: 0, eights: 0 };
     state.dirCounts = data.dirCounts && typeof data.dirCounts === "object"
       ? { 0: data.dirCounts[0]|0, 1: data.dirCounts[1]|0, 2: data.dirCounts[2]|0, 3: data.dirCounts[3]|0 }
       : { 0:0, 1:0, 2:0, 3:0 };
@@ -193,6 +196,11 @@
   try {
     const savedTheme = localStorage.getItem("2048modlab_theme");
     if (savedTheme === "dark") state.theme = "dark";
+  } catch(e) {}
+
+  try {
+    const savedConfirmRestart = localStorage.getItem("2048modlab_confirmrestart");
+    if (savedConfirmRestart === "on") state.confirmRestartEnabled = true;
   } catch(e) {}
 
   // ---------- custom tile theme (.vth) ----------
@@ -402,7 +410,6 @@
   // other mod.
   const Expert = (function(){
     const evalCache = new Map();
-    const PROB_2 = 0.9, PROB_4 = 0.1;
 
     // ---- move-time budget ----
     // The search below is a real expectiminimax that can go many plies
@@ -701,11 +708,15 @@
     }
 
     function cellDisruptionProfile(b, r, c){
-      return {
+      const profile = {
         block: bigTileBlockScore(b, r, c),
         escape2: cornerEscapeScore(b, r, c, 2),
         escape4: cornerEscapeScore(b, r, c, 4)
       };
+      // Only computed when Greed is active (8's can spawn), so Expert's
+      // ranking/search behavior is unchanged when Greed is off.
+      if (state.mods.greed) profile.escape8 = cornerEscapeScore(b, r, c, 8);
+      return profile;
     }
 
     function spawnImpactScore(b, r, c, val, profile){
@@ -728,7 +739,7 @@
       }
       sc += rowColMatches * val * 10;
       const p = profile || cellDisruptionProfile(b, r, c);
-      sc += (val === 2 ? p.escape2 : p.escape4);
+      sc += (val === 2 ? p.escape2 : val === 4 ? p.escape4 : (p.escape8 || 0));
       sc += p.block;
       sc += (snakeScore(b) - snakeScore(tmp)) * 0.01;
       sc += (monotonicityScore(b) - monotonicityScore(tmp)) * 100;
@@ -758,13 +769,21 @@
       const maxCells = depth >= 4 ? 4 : depth >= 2 ? 6 : 8;
       const cells = empty.length > maxCells ? evilSampleCells(b, empty, maxCells) : empty;
 
+      // Uses the live spawn probabilities (currentSpawnProbs, defined
+      // outside this module) so this "what happens next" simulation
+      // matches whatever can actually spawn -- including Greed's 8's,
+      // when Greed is active alongside Expert.
+      const { values: spawnVals, probs: spawnProbs } = currentSpawnProbs();
+
       let worstExpected = Infinity;
       for (const idx of cells){
-        const b2 = cloneFlat(b); b2[idx[0]*SIZE+idx[1]] = 2;
-        const b4 = cloneFlat(b); b4[idx[0]*SIZE+idx[1]] = 4;
-        const ev2 = (depth <= 1) ? evaluateBoardForPlayer(b2) : expectiminimaxMax(b2, depth-1, worstExpected);
-        const ev4 = (depth <= 1) ? evaluateBoardForPlayer(b4) : expectiminimaxMax(b4, depth-1, worstExpected);
-        const expected = PROB_2*ev2 + PROB_4*ev4;
+        let expected = 0;
+        for (let i=0;i<spawnVals.length;i++){
+          const val = spawnVals[i];
+          const bv = cloneFlat(b); bv[idx[0]*SIZE+idx[1]] = val;
+          const ev = (depth <= 1) ? evaluateBoardForPlayer(bv) : expectiminimaxMax(bv, depth-1, worstExpected);
+          expected += spawnProbs[i]*ev;
+        }
 
         if (expected < worstExpected) worstExpected = expected;
         if (worstExpected < ceiling * 0.85) return worstExpected;
@@ -801,7 +820,7 @@
     // the current biggest tile).
     function evilCellPriority(b, r, c, profile){
       const p = profile || cellDisruptionProfile(b, r, c);
-      const disruption = p.block + p.escape2 + p.escape4;
+      const disruption = p.block + p.escape2 + p.escape4 + (p.escape8 || 0);
 
       // Local pressure: sitting next to existing tiles is what makes a
       // spawn actually interfere with the player -- it can block a merge,
@@ -853,6 +872,10 @@
       const EPS = 1e-6;
       let worstScore = Infinity, worstCell = null, worstVal = 2, worstImpact = -Infinity;
 
+      // Greed lets 8's spawn too, so once it's active Expert's adversarial
+      // choice also considers placing an 8, not just 2's and 4's.
+      const candidateVals = state.mods.greed ? [2,4,8] : [2,4];
+
       // Candidates are already ranked best-first (most disruptive cell
       // heuristically first), so if the time budget runs out partway
       // through, whatever's been evaluated so far is still a good pick --
@@ -860,7 +883,7 @@
       // leaving the move undecided.
       for (const [r,c] of candidates){
         const profile = profiles.get(r*SIZE+c);
-        for (const val of [2,4]){
+        for (const val of candidateVals){
           const tmp = cloneFlat(b);
           tmp[r*SIZE+c] = val;
           const playerScore = expectiminimaxMax(tmp, maxDepth-1, Infinity, worstScore);
@@ -957,7 +980,7 @@
     if (!chosen) return null;
 
     state.board[chosen.r][chosen.c] = { id: nextTileId++, value: chosen.val };
-    if (chosen.val === 4) state.spawnStats.fours++; else state.spawnStats.twos++;
+    recordSpawnStat(chosen.val);
     return chosen.r*SIZE + chosen.c;
   }
 
@@ -983,7 +1006,7 @@
     state.magicLog = [];
     state.lockedDir = null;
     state.extrovertTracker = {};
-    state.spawnStats = { twos: 0, fours: 0 };
+    state.spawnStats = { twos: 0, fours: 0, eights: 0 };
     state.dirCounts = { 0:0, 1:0, 2:0, 3:0 };
 
     const s1 = randomSpawn();
@@ -1003,13 +1026,51 @@
     saveGame();
   }
 
+  // Returns the values a spawn can take on and their probabilities,
+  // reflecting whichever of Greed / Coin Flip are currently active:
+  //   neither:            2 (90%), 4 (10%)
+  //   Coin Flip only:     2 (50%), 4 (50%)
+  //   Greed only:         2 (85%), 4 (10%), 8 (5%)
+  //   Greed + Coin Flip:  2, 4, 8 all equally likely
+  // Expert's adversarial engine reads this same function so its search
+  // stays consistent with what can actually spawn.
+  function currentSpawnProbs(){
+    if (state.mods.greed && state.mods.coinflip){
+      return { values: [2,4,8], probs: [1/3, 1/3, 1/3] };
+    }
+    if (state.mods.greed){
+      return { values: [2,4,8], probs: [0.85, 0.10, 0.05] };
+    }
+    if (state.mods.coinflip){
+      return { values: [2,4], probs: [0.5, 0.5] };
+    }
+    return { values: [2,4], probs: [0.9, 0.1] };
+  }
+
+  function pickWeightedValue(values, probs){
+    const r = Math.random();
+    let cum = 0;
+    for (let i=0;i<values.length;i++){
+      cum += probs[i];
+      if (r < cum) return values[i];
+    }
+    return values[values.length-1];
+  }
+
+  function recordSpawnStat(val){
+    if (val === 4) state.spawnStats.fours++;
+    else if (val === 8) state.spawnStats.eights++;
+    else state.spawnStats.twos++;
+  }
+
   function randomSpawn(){
     const cells = emptyCells();
     if (cells.length === 0) return null;
-    const val = Math.random() < (state.mods.coinflip ? 0.5 : 0.1) ? 4 : 2;
+    const { values, probs } = currentSpawnProbs();
+    const val = pickWeightedValue(values, probs);
     const [r,c] = cells[Math.floor(Math.random()*cells.length)];
     state.board[r][c] = { id: nextTileId++, value: val };
-    if (val === 4) state.spawnStats.fours++; else state.spawnStats.twos++;
+    recordSpawnStat(val);
     return r*SIZE + c;
   }
 
@@ -1519,6 +1580,10 @@
   const extrovertLogEl = document.getElementById("extrovertLog");
   const extrovertLogListEl = document.getElementById("extrovertLogList");
   const overlayCloseBtn = document.getElementById("overlayClose");
+  const confirmRestartOverlayEl = document.getElementById("confirmRestartOverlay");
+  const confirmRestartCloseBtn = document.getElementById("confirmRestartClose");
+  const confirmRestartCancelBtn = document.getElementById("confirmRestartCancel");
+  const confirmRestartConfirmBtn = document.getElementById("confirmRestartConfirm");
   const boardWrapEl = document.getElementById("boardWrap");
   const lossFlashEl = document.getElementById("lossFlash");
   const lockoutGlowEls = {
@@ -1947,18 +2012,28 @@
       statRow("Total moves", totalDirs);
 
     // ---- spawns ----
-    const twos = state.spawnStats.twos, fours = state.spawnStats.fours;
-    const totalSpawns = twos + fours;
-    const fourRateLabel = state.mods.expert
-      ? "Adversarial (variable)"
-      : (state.mods.coinflip ? "50%" : "10%");
+    const twos = state.spawnStats.twos, fours = state.spawnStats.fours, eights = state.spawnStats.eights || 0;
+    const totalSpawns = twos + fours + eights;
+    let fourRateLabel, eightRateLabel;
+    if (state.mods.expert){
+      fourRateLabel = "Adversarial (variable)";
+      eightRateLabel = state.mods.greed ? "Adversarial (variable)" : null;
+    } else {
+      const probs = currentSpawnProbs();
+      const idx4 = probs.values.indexOf(4), idx8 = probs.values.indexOf(8);
+      fourRateLabel = (probs.probs[idx4]*100).toFixed(1).replace(/\.0$/, "") + "%";
+      eightRateLabel = idx8 === -1 ? null : (probs.probs[idx8]*100).toFixed(1).replace(/\.0$/, "") + "%";
+    }
 
     statGridSpawnsEl.innerHTML =
       statRow("2 spawns", twos) +
       statRow("4 spawns", fours) +
+      (state.mods.greed ? statRow("8 spawns", eights) : "") +
       statRow("Total spawns", totalSpawns) +
       statRow("Current 4 spawn rate", fourRateLabel) +
-      statRow("Observed 4 spawn rate", pct(fours, totalSpawns));
+      statRow("Observed 4 spawn rate", pct(fours, totalSpawns)) +
+      (eightRateLabel !== null ? statRow("Current 8 spawn rate", eightRateLabel) : "") +
+      (state.mods.greed ? statRow("Observed 8 spawn rate", pct(eights, totalSpawns)) : "");
 
     // ---- expected score ----
     const expected = boardExpectedScore();
@@ -2069,6 +2144,31 @@
   }
   function hideOverlay(){ overlayEl.classList.remove("show"); }
 
+  // Restarting wipes the current board and score, so when the "Confirm
+  // Restart" setting is on we show a small confirmation dialog first
+  // rather than restarting immediately. This guards against accidental
+  // taps on New Game / R while a game is actually in progress.
+  function showConfirmRestartOverlay(){ confirmRestartOverlayEl.classList.add("show"); }
+  function hideConfirmRestartOverlay(){ confirmRestartOverlayEl.classList.remove("show"); }
+
+  function requestNewGame(){
+    if (state.confirmRestartEnabled && !state.gameOver && (state.score > 0 || state.moveCount > 0)){
+      showConfirmRestartOverlay();
+      return;
+    }
+    newGame();
+  }
+
+  confirmRestartConfirmBtn.addEventListener("click", () => {
+    hideConfirmRestartOverlay();
+    newGame();
+  });
+  confirmRestartCancelBtn.addEventListener("click", hideConfirmRestartOverlay);
+  confirmRestartCloseBtn.addEventListener("click", hideConfirmRestartOverlay);
+  confirmRestartOverlayEl.addEventListener("click", (e) => {
+    if (e.target === confirmRestartOverlayEl) hideConfirmRestartOverlay();
+  });
+
   function triggerLossFlash(){
     // Restart the animation even if a previous pulse is still fading out.
     lossFlashEl.classList.remove("pulse");
@@ -2148,16 +2248,21 @@
       closeModal();
       return;
     }
+
+    if (e.key === "Escape" && confirmRestartOverlayEl.classList.contains("show")){
+      hideConfirmRestartOverlay();
+      return;
+    }
   
     // Add this block to handle 'R' for restart
     if (e.key === "r" || e.key === "R") {
       if (e.target.tagName === 'INPUT') return  
-      newGame();
+      requestNewGame();
       return;
     }
   });
 
-  document.getElementById("newGameBtn").addEventListener("click", newGame);
+  document.getElementById("newGameBtn").addEventListener("click", requestNewGame);
   document.getElementById("overlayRestart").addEventListener("click", newGame);
   overlayCloseBtn.addEventListener("click", hideOverlay);
   overlayEl.addEventListener("click", (e) => {
@@ -2509,6 +2614,24 @@
     });
   });
 
+  // ---------- confirm restart setting ----------
+  const confirmRestartSegment = document.getElementById("confirmRestartSegment");
+
+  function syncConfirmRestartButtons(){
+    confirmRestartSegment.querySelectorAll(".seg-btn").forEach(btn => {
+      const isOn = btn.dataset.val === "on";
+      btn.classList.toggle("active", isOn === state.confirmRestartEnabled);
+    });
+  }
+
+  confirmRestartSegment.querySelectorAll(".seg-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      state.confirmRestartEnabled = btn.dataset.val === "on";
+      syncConfirmRestartButtons();
+      try { localStorage.setItem("2048modlab_confirmrestart", btn.dataset.val); } catch(e) {}
+    });
+  });
+
   // Tapping/clicking an edge zone moves in that direction, same as a
   // keypress or swipe. Use pointerdown (not click) so the move fires the
   // instant the press begins rather than waiting for release. Object keys
@@ -2608,6 +2731,7 @@
   syncThemeButtons();
   syncTapControlsButtons();
   syncTapZones();
+  syncConfirmRestartButtons();
   loadBestScore();
   if (!loadGame()) newGame();
 })();

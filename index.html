@@ -73,6 +73,18 @@
     <p class="hint">Move with <kbd>&#8593;</kbd><kbd>&#8595;</kbd><kbd>&#8592;</kbd><kbd>&#8594;</kbd> or <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>. swipe on touch devices.</p>
   </div>
 
+  <div class="overlay" id="confirmRestartOverlay">
+    <div class="overlay-window">
+      <button class="overlay-close" id="confirmRestartClose" type="button" aria-label="Close">&times;</button>
+      <h2>Restart Game?</h2>
+      <p>Your current board and score will be lost.</p>
+      <div class="buttons">
+        <button class="pill secondary" id="confirmRestartCancel" type="button">Cancel</button>
+        <button class="pill" id="confirmRestartConfirm" type="button">Restart</button>
+      </div>
+    </div>
+  </div>
+
   <div class="modal-overlay" id="modalOverlay">
     <div class="modal" role="dialog" aria-modal="true" aria-label="Mods and settings">
       <div class="modal-header">
@@ -116,6 +128,14 @@
           <section class="tap-controls-section">
             <h3>Tap Controls</h3>
             <div class="segmented" id="tapControlsSegment">
+              <button class="seg-btn" data-val="on" type="button">On</button>
+              <button class="seg-btn" data-val="off" type="button">Off</button>
+            </div>
+          </section>
+
+          <section class="confirm-restart-section">
+            <h3>Confirm Restart</h3>
+            <div class="segmented" id="confirmRestartSegment">
               <button class="seg-btn" data-val="on" type="button">On</button>
               <button class="seg-btn" data-val="off" type="button">Off</button>
             </div>
