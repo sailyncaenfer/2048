@@ -23,12 +23,16 @@
   const TILE_KEYS = [2,4,8,16,32,64,128,256,512,1024,2048,4096,8192,16384,32768,65536,131072];
 
   const MODS = [
+    { key:"shy",       name:"Shy",       abbr:"SH", accent:"rgb(216, 148, 231)",
+      desc:"New tiles spawn opposite your move." },
     { key:"gravity",   name:"Gravity",   abbr:"GR", accent:"rgb(93,138,168)",
       desc:"Every move is performed twice." },
     { key:"touch",     name:"Touch",     abbr:"TC", accent:"rgb(0,150,136)",
       desc:"Only adjacent tiles can be merged." },
     { key:"blocked",   name:"Blocked",   abbr:"BL", accent:"rgb(40,36,30)",
       desc:"An unmergeable tile is spawned at the start of the game." },
+    { key:"sloth",     name:"Sloth",     abbr:"SL", accent:"rgb(120, 100, 60)",
+      desc:"Tiles only move one cell at a time." },
     { key:"invisible", name:"Invisible", abbr:"IV", accent:"rgb(150,140,140)",
       desc:"Only newly spawned tiles are shown." },
     { key:"coinflip",  name:"Coin Flip", abbr:"CF", accent:"rgb(212,175,55)",
@@ -55,13 +59,14 @@
     score:0, best:0, moveCount:0, gameOver:false,
     lastMergeValue:0,
     spawnLocs: [],
+    lastMerges: [],        // [{consumedId, survivorId}] recorded during the most recent move, used to animate merges
     magicLog: [],   // history of merge values while Magician is active, newest first
     animationsEnabled: true,
     tapControlsEnabled: false,
     confirmRestartEnabled: false,
     theme: "light",
     lockedDir: null, // direction disabled this turn while Lockout is active
-    mods: { gravity:false, invisible:false, magician:false, volatile:false, blocked:false, touch:false, coinflip:false, lockout:false, extrovert:false, expert:false, greed:false },
+    mods: { gravity:false, invisible:false, magician:false, volatile:false, blocked:false, touch:false, coinflip:false, lockout:false, extrovert:false, expert:false, greed:false, sloth:false, shy:false },
     chaosMode: false,     // true once the "chaos" cheat code has been typed in the mods menu
     chaosActiveMod: null, // key of the single mod Chaos Mode currently has switched on
     extrovertTracker: {}, // tile id -> { row, col, streak } for Extrovert's "stayed put" tracking
@@ -369,6 +374,25 @@
     return cells;
   }
 
+  // ---------- Shy mod: restrict spawns to the far side from the move ----------
+  // A tile that just moved (say) right leaves its "wake" along the left
+  // column; Shy confines new spawns to that opposite edge. Falls back to
+  // every empty cell if that edge happens to be completely full, and is a
+  // no-op (returns all empty cells) when Shy is off or no direction is known
+  // (e.g. the two starting tiles at the beginning of a game).
+  function shyFilterCells(cells, direction){
+    if (!state.mods.shy || direction === null || direction === undefined) return cells;
+    let filtered;
+    switch (direction){
+      case DIR.LEFT:  filtered = cells.filter(([r,c]) => c === SIZE-1); break; // moved left -> spawn rightmost column
+      case DIR.RIGHT: filtered = cells.filter(([r,c]) => c === 0); break;      // moved right -> spawn leftmost column
+      case DIR.UP:    filtered = cells.filter(([r,c]) => r === SIZE-1); break; // moved up -> spawn bottom row
+      case DIR.DOWN:  filtered = cells.filter(([r,c]) => r === 0); break;      // moved down -> spawn top row
+      default: filtered = cells;
+    }
+    return filtered.length > 0 ? filtered : cells;
+  }
+
   function rotateRightOnce(grid){
     const t = emptyGrid(null);
     for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) t[r][c] = grid[SIZE-1-c][r];
@@ -460,6 +484,34 @@
       return { row: out, score: gainedScore };
     }
 
+    // Sloth-aware row slide: every tile advances (or merges into its left
+    // neighbor) by at most one cell, mirroring moveTileLeft's single
+    // do-while pass in the real game instead of sliding the whole row flush.
+    // Keeping this in lockstep with the real mechanic matters because
+    // Expert's lookahead (simulatePlayerBest, countFutureMerges, the
+    // expectiminimax search itself) all replay hypothetical player moves
+    // through moveLeftFlat -- if that still assumed a full slide while
+    // Sloth capped real moves at one cell, Expert would be judging "worst
+    // spawn" against futures the player could never actually reach.
+    function slideRowSloth(a,b,c,d){
+      const row = [a,b,c,d];
+      const merged = [false,false,false,false];
+      let gainedScore = 0;
+      for (let col=1; col<SIZE; col++){
+        if (!row[col]) continue;
+        if (!row[col-1]){
+          row[col-1] = row[col];
+          row[col] = 0;
+        } else if (row[col-1] === row[col] && !merged[col-1]){
+          row[col-1] *= 2;
+          gainedScore += row[col-1];
+          merged[col-1] = true;
+          row[col] = 0;
+        }
+      }
+      return { row, score: gainedScore };
+    }
+
     function rotateFlat(b){
       const out = emptyBoardFlat();
       for (let r=0;r<SIZE;r++){
@@ -475,7 +527,9 @@
       const newBoard = emptyBoardFlat();
       for (let r=0;r<SIZE;r++){
         const offset = r*SIZE;
-        const { row, score } = slideRow(b[offset], b[offset+1], b[offset+2], b[offset+3]);
+        const { row, score } = state.mods.sloth
+          ? slideRowSloth(b[offset], b[offset+1], b[offset+2], b[offset+3])
+          : slideRow(b[offset], b[offset+1], b[offset+2], b[offset+3]);
         totalScore += score;
         for (let c=0;c<SIZE;c++) newBoard[offset+c] = row[c];
         if (!moved){
@@ -964,8 +1018,8 @@
   // TV-static sentinel (-1) are remapped to an ordinary positive number
   // first so they read as "occupied" to the engine instead of tripping up
   // its math (it takes log2() of tile values, which breaks on negatives).
-  function expertSpawn(){
-    const cells = emptyCells();
+  function expertSpawn(direction){
+    const cells = shyFilterCells(emptyCells(), direction);
     if (cells.length === 0) return null;
 
     const flat = new Array(SIZE*SIZE).fill(0);
@@ -973,6 +1027,19 @@
       for (let c=0;c<SIZE;c++){
         const cell = state.board[r][c];
         flat[r*SIZE+c] = cell ? (cell.value > 0 ? cell.value : 2) : 0;
+      }
+    }
+
+    // If Shy narrowed things down, mask every empty cell that isn't in the
+    // allowed set as temporarily occupied so the adversarial search only
+    // ever considers the legal side of the board.
+    if (state.mods.shy){
+      const allowed = new Set(cells.map(([r,c]) => r*SIZE+c));
+      for (let r=0;r<SIZE;r++){
+        for (let c=0;c<SIZE;c++){
+          const idx = r*SIZE+c;
+          if (flat[idx] === 0 && !allowed.has(idx)) flat[idx] = 1; // sentinel: not really a tile, just "unavailable"
+        }
       }
     }
 
@@ -1063,8 +1130,8 @@
     else state.spawnStats.twos++;
   }
 
-  function randomSpawn(){
-    const cells = emptyCells();
+  function randomSpawn(direction){
+    const cells = shyFilterCells(emptyCells(), direction);
     if (cells.length === 0) return null;
     const { values, probs } = currentSpawnProbs();
     const val = pickWeightedValue(values, probs);
@@ -1074,8 +1141,8 @@
     return r*SIZE + c;
   }
 
-  function randomSpawnBlock(){
-    const cells = emptyCells();
+  function randomSpawnBlock(direction){
+    const cells = shyFilterCells(emptyCells(), direction);
     if (cells.length === 0) return null;
     const [r,c] = cells[Math.floor(Math.random()*cells.length)];
     state.board[r][c] = { id: nextTileId++, value: 1 }; // sentinel: permanent obstacle tile
@@ -1117,6 +1184,7 @@
 
     if (!merged[row][col-1]){
       const preMergeValue = b[row][col].value;
+      state.lastMerges.push({ consumedId: b[row][col].id, survivorId: b[row][col-1].id });
       b[row][col-1].value *= 2;
       b[row][col] = null;
       merged[row][col-1] = 1;
@@ -1156,6 +1224,7 @@
           (col - lastOrigCol === 1)){
         // Same value, previous tile hasn't merged yet, and the two tiles
         // were originally touching (no gap between them).
+        state.lastMerges.push({ consumedId: cell.id, survivorId: prev.id });
         newRow[writeIndex-1] = { id: prev.id, value: prev.value * 2 };
         state.score += newRow[writeIndex-1].value;
         mergeValues.push(newRow[writeIndex-1].value);
@@ -1195,7 +1264,7 @@
           do{
             ret = moveTileLeft(row, tempCol, merged, mergeValues);
             if (ret === MOVED) tempCol -= 1;
-          } while (ret === MOVED);
+          } while (ret === MOVED && !state.mods.sloth);
         }
       }
     }
@@ -1498,6 +1567,7 @@
     if (state.mods.lockout && state.lockedDir === direction) return;
 
     const before = cloneBoard(state.board);
+    state.lastMerges = [];
     let mergeValues = moveAndMergeOnce(direction);
 
     if (state.mods.gravity){
@@ -1527,13 +1597,13 @@
       if (chaosSwitchedToBlocked){
         // Blocked just got dealt in by Chaos Mode: its obstacle tile takes
         // priority over the normal random spawn this move.
-        const sB = randomSpawnBlock();
+        const sB = randomSpawnBlock(direction);
         if (sB !== null) justSpawned.push(sB);
       } else {
-        const s1 = state.mods.expert ? expertSpawn() : randomSpawn();
+        const s1 = state.mods.expert ? expertSpawn(direction) : randomSpawn(direction);
         if (s1 !== null) justSpawned.push(s1);
         if (state.mods.volatile){
-          const s2 = state.mods.expert ? expertSpawn() : randomSpawn();
+          const s2 = state.mods.expert ? expertSpawn(direction) : randomSpawn(direction);
           if (s2 !== null) justSpawned.push(s2);
         }
       }
@@ -1774,6 +1844,15 @@
     }
   }
 
+  // Timing for the slide/merge sequence. Tiles slide into place first;
+  // only once they've arrived does a merge "pop" (or a consumed tile's
+  // fade) play, so merges read as two tiles landing on top of each other
+  // before resolving into the new value -- rather than everything
+  // happening simultaneously.
+  const SLIDE_MS = 150;
+  const POP_MS = 120;
+  const FADE_MS = 100;
+
   function renderTiles(animate){
     const total = tilesLayerEl.clientWidth || tilesLayerEl.offsetWidth || 0;
     const cell = Math.max(0, (total - GAP*(SIZE-1)) / SIZE);
@@ -1781,6 +1860,13 @@
     const showAll = !state.mods.invisible || state.moveCount === 0 || state.gameOver;
     const visibleSet = new Set(state.spawnLocs);
     const newIds = new Set();
+
+    // Where each surviving tile is headed this render, keyed by id. Consumed
+    // (merged-away) tiles use this to find their survivor's landing spot so
+    // they can slide there too, instead of just fading out where they stood.
+    const targetPos = new Map();
+    const consumedToSurvivor = new Map();
+    for (const m of state.lastMerges) consumedToSurvivor.set(m.consumedId, m.survivorId);
 
     for (let r=0;r<SIZE;r++){
       for (let c=0;c<SIZE;c++){
@@ -1799,6 +1885,7 @@
         if (!showAll && !isMagic && !visibleSet.has(loc)) continue;
 
         const x = c*(cell+GAP), y = r*(cell+GAP);
+        targetPos.set(cellData.id, {x, y});
 
         let el = tileEls.get(cellData.id);
         const isNew = !el;
@@ -1842,17 +1929,26 @@
         } else {
           const prevValue = Number(el.dataset.value);
           const valueChanged = !Number.isNaN(prevValue) && prevValue !== cellData.value;
-          el.style.transition = animate ? "transform .18s ease, opacity .15s ease" : "none";
+          el.style.zIndex = valueChanged ? "2" : "1";
+          el.style.opacity = "1";
           if (valueChanged && animate){
-            el.style.transform = `translate(${x}px, ${y}px) scale(1.18)`;
+            // Slide to the merged cell first, at the same speed as every
+            // other tile, staying at scale 1 so it looks like it's simply
+            // arriving. Only once it lands does the new, doubled tile pop.
+            el.style.transition = `transform ${SLIDE_MS}ms ease`;
+            el.style.transform = `translate(${x}px, ${y}px) scale(1)`;
             el._pulseTimeout = setTimeout(() => {
-              el.style.transform = `translate(${x}px, ${y}px) scale(1)`;
-              el._pulseTimeout = null;
-            }, 130);
+              el.style.transition = `transform ${POP_MS}ms ease`;
+              el.style.transform = `translate(${x}px, ${y}px) scale(1.18)`;
+              el._pulseTimeout = setTimeout(() => {
+                el.style.transform = `translate(${x}px, ${y}px) scale(1)`;
+                el._pulseTimeout = null;
+              }, POP_MS);
+            }, SLIDE_MS);
           } else {
+            el.style.transition = animate ? `transform ${SLIDE_MS}ms ease` : "none";
             el.style.transform = `translate(${x}px, ${y}px) scale(1)`;
           }
-          el.style.opacity = "1";
         }
 
         el.dataset.value = String(cellData.value);
@@ -1869,7 +1965,22 @@
         clearTimeout(el._pulseTimeout);
         el._pulseTimeout = null;
       }
-      if (animate){
+      const survivorId = consumedToSurvivor.get(id);
+      const target = survivorId !== undefined ? targetPos.get(survivorId) : null;
+
+      if (animate && target){
+        // This tile was merged away: slide it on top of the tile it merged
+        // into (same timing as a normal move), then let it disappear right
+        // as the survivor pops, so the two visually collapse into one.
+        el.style.zIndex = "1";
+        el.style.transition = `transform ${SLIDE_MS}ms ease`;
+        el.style.transform = `translate(${target.x}px, ${target.y}px) scale(1)`;
+        setTimeout(() => {
+          el.style.transition = `opacity ${FADE_MS}ms ease`;
+          el.style.opacity = "0";
+          setTimeout(() => el.remove(), FADE_MS);
+        }, SLIDE_MS);
+      } else if (animate){
         const curTransform = el.style.transform || "";
         el.style.transition = "opacity .15s ease, transform .15s ease";
         el.style.opacity = "0";
