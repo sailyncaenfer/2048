@@ -1228,7 +1228,7 @@ button.pill.secondary.active {
   justify-content: center;
   cursor: pointer;
   padding: 0;
-  transition: transform .18s ease, filter .18s ease, border-color .15s ease, box-shadow .15s ease;
+  transition: transform .18s ease, filter .25s ease, border-color .15s ease, box-shadow .15s ease, opacity .25s ease;
 }
 
 .mod-square:hover {
@@ -1263,9 +1263,42 @@ button.pill.secondary.active {
   pointer-events: none;
 }
 
+.mod-square.incompatible {
+  opacity: 0.35;
+  filter: grayscale(0.8);
+}
+
+.mod-square.incompatible .abbr {
+  transition: color .25s ease;
+  color: var(--fg-muted, #888);
+}
+
 .mod-desc-item.chaos-desc {
   border-left: 3px solid rgb(212,175,55);
   padding-left: 8px;
+}
+
+.chaos-level-section {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-soft);
+  animation: chaos-level-in .2s ease;
+}
+
+.chaos-level-section h4 {
+  margin: 0 0 4px;
+  font-size: 0.95em;
+}
+
+.chaos-level-section .sub {
+  margin: 0 0 10px;
+  font-size: 0.85em;
+  color: var(--fg-muted, #888);
+}
+
+@keyframes chaos-level-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 .mod-desc-panel {

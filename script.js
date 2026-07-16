@@ -36,22 +36,33 @@
     { key:"invisible", name:"Invisible", abbr:"IV", accent:"rgb(150,140,140)",
       desc:"Only newly spawned tiles are shown." },
     { key:"coinflip",  name:"Coin Flip", abbr:"CF", accent:"rgb(212,175,55)",
-      desc:"Spawnable tiles are equally likely to spawn." },
+      desc:"Spawnable tiles are equally likely to spawn.", incompatibleWith:["expert"] },
     { key:"greed",     name:"Greed",     abbr:"GD", accent:"rgb(60, 160, 80)",
       desc:"8's can also spawn: 2 (85%), 4 (10%), 8 (5%)." },
     { key:"volatile",  name:"Volatile",  abbr:"VL", accent:"rgb(252, 76, 228)",
       desc:"Two new tiles spawn after every move instead of one." },
     { key:"extrovert", name:"Extrovert", abbr:"XT", accent:"rgb(255, 140, 66)",
       desc:"If the biggest tile sits in the same spot for 7 moves, it swaps with the tile in a fixed spot toward the center." },
+    { key:"drunk",     name:"Drunk",     abbr:"DR", accent:"rgb(66, 133, 244)",
+      desc:"You can't move in the same direction twice in a row." },
     { key:"lockout",   name:"Lockout",   abbr:"LO", accent:"rgb(255, 79, 79)",
       desc:"A random direction is disabled every move." },
     { key:"magician",  name:"Magician",  abbr:"MG", accent:"rgb(169, 54, 160)",
       desc:"Making the same merge twice spawns a temporary unmergeable block. Make unique merges to make it vanish." },
     { key:"expert",    name:"Expert",    abbr:"EX", accent:"rgb(139, 0, 0)",
-      desc:"Tiles are spawned adversarially." },
-    { key:"drunk",     name:"Drunk",     abbr:"DR", accent:"rgb(66, 133, 244)",
-      desc:"You can't move in the same direction twice in a row." },
+      desc:"Tiles are spawned adversarially.", incompatibleWith:["coinflip"] },
   ];
+
+  // Build a symmetric incompatibility map so declaring the relationship on
+  // just one side (e.g. only "coinflip" lists "expert") is enough - both
+  // mods end up knowing about each other.
+  const MOD_INCOMPATIBILITIES = {};
+  MODS.forEach(m => { MOD_INCOMPATIBILITIES[m.key] = new Set(m.incompatibleWith || []); });
+  MODS.forEach(m => {
+    (m.incompatibleWith || []).forEach(otherKey => {
+      if (MOD_INCOMPATIBILITIES[otherKey]) MOD_INCOMPATIBILITIES[otherKey].add(m.key);
+    });
+  });
 
   let nextTileId = 1;
 
@@ -71,7 +82,8 @@
     lastMoveDir: null, // direction of the last move that actually changed the board, disabled this turn while Drunk is active
     mods: { gravity:false, invisible:false, magician:false, volatile:false, blocked:false, touch:false, coinflip:false, lockout:false, extrovert:false, expert:false, greed:false, sloth:false, shy:false, drunk:false },
     chaosMode: false,     // true once the "chaos" cheat code has been typed in the mods menu
-    chaosActiveMod: null, // key of the single mod Chaos Mode currently has switched on
+    chaosLevel: 1,         // how many mods Chaos Mode keeps active at once (1-5)
+    chaosActiveMods: [],   // keys of the mods Chaos Mode currently has switched on
     extrovertTracker: {}, // tile id -> { row, col, streak } for Extrovert's "stayed put" tracking
     spawnStats: { twos: 0, fours: 0, eights: 0 }, // count of real (non-sentinel) tile spawns, by value
     dirCounts: { 0:0, 1:0, 2:0, 3:0 }  // count of directional inputs received, keyed by DIR value
@@ -115,7 +127,8 @@
       lastMoveDir: state.lastMoveDir,
       mods: state.mods,
       chaosMode: state.chaosMode,
-      chaosActiveMod: state.chaosActiveMod,
+      chaosLevel: state.chaosLevel,
+      chaosActiveMods: state.chaosActiveMods,
       extrovertTracker: state.extrovertTracker,
       spawnStats: state.spawnStats,
       dirCounts: state.dirCounts,
@@ -151,7 +164,8 @@
     state.lastMoveDir = (typeof data.lastMoveDir === "number") ? data.lastMoveDir : null;
     if (data.mods) state.mods = Object.assign({}, state.mods, data.mods);
     state.chaosMode = !!data.chaosMode;
-    state.chaosActiveMod = data.chaosActiveMod || null;
+    state.chaosLevel = (typeof data.chaosLevel === "number" && data.chaosLevel >= 1 && data.chaosLevel <= 5) ? data.chaosLevel : 1;
+    state.chaosActiveMods = Array.isArray(data.chaosActiveMods) ? data.chaosActiveMods : [];
     state.extrovertTracker = data.extrovertTracker && typeof data.extrovertTracker === "object" ? data.extrovertTracker : {};
     state.spawnStats = data.spawnStats && typeof data.spawnStats === "object"
       ? { twos: data.spawnStats.twos|0, fours: data.spawnStats.fours|0, eights: data.spawnStats.eights|0 }
@@ -211,6 +225,11 @@
   try {
     const savedConfirmRestart = localStorage.getItem("2048modlab_confirmrestart");
     if (savedConfirmRestart === "on") state.confirmRestartEnabled = true;
+  } catch(e) {}
+
+  try {
+    const savedChaosLevel = parseInt(localStorage.getItem("2048modlab_chaoslevel"), 10);
+    if (savedChaosLevel >= 1 && savedChaosLevel <= 5) state.chaosLevel = savedChaosLevel;
   } catch(e) {}
 
   // ---------- custom tile theme (.vth) ----------
@@ -361,7 +380,7 @@
   // ---------- helpers ----------
 
   function getBestScoreKey() {
-    if (state.chaosMode) return "2048modlab_best_chaos";
+    if (state.chaosMode) return "2048modlab_best_chaos_lvl" + state.chaosLevel;
 
     const active = MODS
     .filter(mod => state.mods[mod.key])
@@ -448,13 +467,15 @@
   // ---------- game setup ----------
   function newGame(){
     if (state.chaosMode){
-      if (state.chaosActiveMod === "blocked") removeBlockedTiles();
-      if (state.chaosActiveMod === "magician") removeMagicTiles();
-      if (state.chaosActiveMod) state.mods[state.chaosActiveMod] = false;
+      state.chaosActiveMods.forEach(key => {
+        if (key === "blocked") removeBlockedTiles();
+        if (key === "magician") removeMagicTiles();
+        state.mods[key] = false;
+      });
 
-      const key = chaosPickDifferentMod(state.chaosActiveMod);
-      state.mods[key] = true;
-      state.chaosActiveMod = key;
+      const picked = chaosPickModSet(state.chaosLevel);
+      picked.forEach(key => { state.mods[key] = true; });
+      state.chaosActiveMods = picked;
     }
 
     state.board = emptyGrid(null);
@@ -819,46 +840,85 @@
   }
 
   // ---------- chaos mode ----------
-  // Picks a mod key other than the one passed in.
-  function chaosPickDifferentMod(excludeKey){
-    const candidates = MODS.map(m => m.key).filter(k => k !== excludeKey);
-    return candidates[Math.floor(Math.random() * candidates.length)];
+  // Picks `count` mods at random, skipping any that would be incompatible
+  // with a mod already chosen for this set, so Chaos Mode never lands on
+  // two mutually-exclusive mods (e.g. Coin Flip + Expert) at once.
+  function chaosPickModSet(count, excludeKeys){
+    const exclude = excludeKeys || [];
+    const keys = MODS.map(m => m.key).filter(k => !exclude.includes(k));
+    // Fisher-Yates shuffle so the pick order is unbiased.
+    for (let i = keys.length - 1; i > 0; i--){
+      const j = Math.floor(Math.random() * (i + 1));
+      [keys[i], keys[j]] = [keys[j], keys[i]];
+    }
+    const chosen = [];
+    for (const k of keys){
+      if (chosen.length >= count) break;
+      if (chosen.some(c => MOD_INCOMPATIBILITIES[c].has(k))) continue;
+      chosen.push(k);
+    }
+    return chosen;
   }
 
-  // Turns Chaos Mode on (picking one random starting mod) or off (dropping
-  // whatever mod it currently has active). Always starts a fresh game after,
-  // same as toggling a mod square by hand.
+  // Turns Chaos Mode on (picking a fresh random set of state.chaosLevel
+  // mods) or off (dropping whatever mods it currently has active). Always
+  // starts a fresh game after, same as toggling a mod square by hand.
   function setChaosMode(on){
     state.chaosMode = on;
     MODS.forEach(m => state.mods[m.key] = false);
-    state.chaosActiveMod = null;
+    state.chaosActiveMods = [];
 
     loadBestScore();
-    newGame();       // newGame() picks the starting mod itself when chaosMode is true
+    newGame();       // newGame() picks the starting mod set itself when chaosMode is true
     syncModCards();  // sync AFTER, so the menu reflects whatever newGame() landed on
   }
 
-  // Called once per successful move while Chaos Mode is active. 10% chance
-  // to swap the currently active mod out for a different random one.
-  // Returns true if the swap just turned Blocked on, so the caller can spawn
-  // an obstacle tile in place of this move's natural spawn.
+  // Changes how many mods Chaos Mode keeps active at once (1-5), then
+  // re-rolls a fresh set at the new size and starts a new game with it.
+  function setChaosLevel(level){
+    level = Math.max(1, Math.min(5, level|0));
+    state.chaosLevel = level;
+    try { localStorage.setItem("2048modlab_chaoslevel", String(level)); } catch(e) {}
+
+    if (state.chaosMode){
+      loadBestScore();
+      newGame();
+      syncModCards();
+    }
+  }
+
+  // Called once per successful move while Chaos Mode is active. Each mod
+  // currently active in the chaos set independently has a 10% chance to be
+  // swapped out for a different random mod (still respecting incompatibility
+  // with whatever else remains in the set). Returns true if Blocked just got
+  // newly switched in, so the caller can spawn an obstacle tile in place of
+  // this move's normal spawn.
   function maybeChaosSwitch(){
     if (!state.chaosMode) return false;
-    if (Math.random() >= 0.10) return false;
 
-    const oldKey = state.chaosActiveMod;
-    const newKey = chaosPickDifferentMod(oldKey);
+    const current = state.chaosActiveMods.slice();
+    let blockedNewlyAdded = false;
 
-    if (oldKey){
+    for (let i = 0; i < current.length; i++){
+      if (Math.random() >= 0.10) continue;
+
+      const oldKey = current[i];
+      const rest = current.filter((k, j) => j !== i);
+      const incompatibleWithRest = MODS.map(m => m.key).filter(k => rest.some(r => MOD_INCOMPATIBILITIES[r].has(k)));
+      const [newKey] = chaosPickModSet(1, [oldKey, ...rest, ...incompatibleWithRest]);
+      if (!newKey) continue; // no valid replacement available, leave this slot as-is
+
       state.mods[oldKey] = false;
       if (oldKey === "blocked") removeBlockedTiles();
       if (oldKey === "magician") removeMagicTiles();
+
+      state.mods[newKey] = true;
+      if (newKey === "blocked") blockedNewlyAdded = true;
+      current[i] = newKey;
     }
 
-    state.mods[newKey] = true;
-    state.chaosActiveMod = newKey;
-
-    return newKey === "blocked";
+    state.chaosActiveMods = current;
+    return blockedNewlyAdded;
   }
 
   // ---------- magician mechanics ----------
@@ -1796,7 +1856,7 @@
   });
   document.getElementById("resetModsBtn").addEventListener("click", () => {
     state.chaosMode = false;
-    state.chaosActiveMod = null;
+    state.chaosActiveMods = [];
     MODS.forEach(m => state.mods[m.key] = false);
     syncModCards();
     loadBestScore();
@@ -2177,6 +2237,8 @@
   // and brighten so it's clear at a glance which are selected.
   const modListEl = document.getElementById("modList");
   const modDescPanelEl = document.getElementById("modDescPanel");
+  const chaosLevelSection = document.getElementById("chaosLevelSection");
+  const chaosLevelSegment = document.getElementById("chaosLevelSegment");
 
   MODS.forEach(m => {
     const square = document.createElement("button");
@@ -2194,6 +2256,10 @@
       if (state.chaosMode) return; // mods are picked automatically while Chaos Mode is running
       const key = square.dataset.key;
       state.mods[key] = !state.mods[key];
+      if (state.mods[key]){
+        // Turning a mod on automatically turns off anything incompatible with it.
+        MOD_INCOMPATIBILITIES[key].forEach(otherKey => { state.mods[otherKey] = false; });
+      }
       syncModCards();
       loadBestScore();
       newGame();
@@ -2201,20 +2267,46 @@
   });
 
   function syncModCards(){
+    // A mod is "incompatible-locked" (grayed out) if it isn't itself active
+    // but some currently active mod lists it as incompatible. It's still
+    // clickable - clicking it turns it on and turns off whatever it conflicts with.
+    const incompatibleLocked = new Set();
+    MODS.forEach(m => {
+      if (state.mods[m.key]){
+        MOD_INCOMPATIBILITIES[m.key].forEach(otherKey => incompatibleLocked.add(otherKey));
+      }
+    });
+
     MODS.forEach(m => {
       const square = modListEl.querySelector(`.mod-square[data-key="${m.key}"]`);
       square.classList.toggle("active", state.mods[m.key]);
       square.classList.toggle("chaos-locked", state.chaosMode);
+      square.classList.toggle("incompatible", incompatibleLocked.has(m.key) && !state.mods[m.key]);
     });
+
+    chaosLevelSection.hidden = !state.chaosMode;
+    if (state.chaosMode){
+      chaosLevelSegment.querySelectorAll(".seg-btn").forEach(btn => {
+        btn.classList.toggle("active", parseInt(btn.dataset.val, 10) === state.chaosLevel);
+      });
+    }
+
     renderModDescPanel();
   }
 
+  chaosLevelSegment.querySelectorAll(".seg-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      if (!state.chaosMode) return;
+      setChaosLevel(parseInt(btn.dataset.val, 10));
+      syncModCards();
+    });
+  });
+
   function renderModDescPanel(){
     if (state.chaosMode){
-      const activeMod = MODS.find(m => m.key === state.chaosActiveMod);
-      modDescPanelEl.innerHTML = `<div class="mod-desc-item chaos-desc"><b>Chaos Mode:</b> mods shuffle themselves — a 10% chance per move to swap to a different random mod. Type "chaos" again to turn it off.<br>` +
-        (activeMod ? ` Currently active: <b>${activeMod.name}</b> &mdash; ${activeMod.desc}` : "") +
-        `</div>`;
+      const activeMods = MODS.filter(m => state.chaosActiveMods.includes(m.key));
+      modDescPanelEl.innerHTML = `<div class="mod-desc-item chaos-desc"><b>Chaos Mode:</b> keeping ${state.chaosLevel} mod${state.chaosLevel === 1 ? "" : "s"} active at once, each with a 10% chance per move to swap to a different random mod. Type "chaos" again to turn it off.</div>` +
+        activeMods.map(m => `<div class="mod-desc-item"><b>${m.name}:</b> ${m.desc}</div>`).join("");
       return;
     }
     const active = MODS.filter(m => state.mods[m.key]);
