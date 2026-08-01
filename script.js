@@ -23,34 +23,36 @@
   const TILE_KEYS = [2,4,8,16,32,64,128,256,512,1024,2048,4096,8192,16384,32768,65536,131072];
 
   const MODS = [
-    { key:"shy",       name:"Shy",       abbr:"SH", accent:"rgb(216, 148, 231)",
+    { key:"shy",        name:"Shy",       abbr:"SH", accent:"rgb(216, 148, 231)",
       desc:"New tiles spawn opposite your move." },
-    { key:"gravity",   name:"Gravity",   abbr:"GR", accent:"rgb(93,138,168)",
+    { key:"gravity",    name:"Gravity",   abbr:"GR", accent:"rgb(93,138,168)",
       desc:"Every move is performed twice." },
-    { key:"touch",     name:"Touch",     abbr:"TC", accent:"rgb(0,150,136)",
+    { key:"touch",      name:"Touch",     abbr:"TC", accent:"rgb(0,150,136)",
       desc:"Only adjacent tiles can be merged." },
-    { key:"blocked",   name:"Blocked",   abbr:"BL", accent:"rgb(40,36,30)",
+    { key:"blocked",    name:"Blocked",   abbr:"BL", accent:"rgb(40,36,30)",
       desc:"An unmergeable tile is spawned at the start of the game." },
-    { key:"sloth",     name:"Sloth",     abbr:"SL", accent:"rgb(120, 100, 60)",
+    { key:"sloth",      name:"Sloth",     abbr:"SL", accent:"rgb(120, 100, 60)",
       desc:"Tiles only move one cell at a time." },
-    { key:"invisible", name:"Invisible", abbr:"IV", accent:"rgb(150,140,140)",
+    { key:"invisible",  name:"Invisible", abbr:"IV", accent:"rgb(150,140,140)",
       desc:"Only newly spawned tiles are shown." },
-    { key:"coinflip",  name:"Coin Flip", abbr:"CF", accent:"rgb(212,175,55)",
+    { key:"coinflip",   name:"Coin Flip", abbr:"CF", accent:"rgb(212,175,55)",
       desc:"Spawnable tiles are equally likely to spawn.", incompatibleWith:["expert"] },
-    { key:"greed",     name:"Greed",     abbr:"GD", accent:"rgb(60, 160, 80)",
+    { key:"greed",      name:"Greed",     abbr:"GD", accent:"rgb(60, 160, 80)",
       desc:"8's can also spawn: 2 (85%), 4 (10%), 8 (5%)." },
-    { key:"volatile",  name:"Volatile",  abbr:"VL", accent:"rgb(252, 76, 228)",
+    { key:"volatile",   name:"Volatile",  abbr:"VL", accent:"rgb(252, 76, 228)",
       desc:"Two new tiles spawn after every move instead of one." },
-    { key:"extrovert", name:"Extrovert", abbr:"XT", accent:"rgb(255, 140, 66)",
+    { key:"extrovert",  name:"Extrovert", abbr:"XT", accent:"rgb(255, 140, 66)",
       desc:"If the biggest tile sits in the same spot for 7 moves, it swaps with the tile in a fixed spot toward the center." },
-    { key:"drunk",     name:"Drunk",     abbr:"DR", accent:"rgb(66, 133, 244)",
+    { key:"drunk",      name:"Drunk",     abbr:"DR", accent:"rgb(66, 133, 244)",
       desc:"You can't move in the same direction twice in a row." },
-    { key:"lockout",   name:"Lockout",   abbr:"LO", accent:"rgb(255, 79, 79)",
+    { key:"doubledown", name:"Double Down", abbr:"DD", accent:"#38ff6d",
+      desc:"You can't move opposite your previous move." },
+    { key:"lockout",    name:"Lockout",   abbr:"LO", accent:"rgb(255, 79, 79)",
       desc:"A random direction is disabled every move." },
-    { key:"magician",  name:"Magician",  abbr:"MG", accent:"rgb(169, 54, 160)",
+    { key:"expert",     name:"Expert",    abbr:"EX", accent:"rgb(139, 0, 0)",
+      desc:"Tiles are spawned to your disadvantage.", incompatibleWith:["coinflip"] },
+    { key:"magician",   name:"Magician",  abbr:"MG", accent:"rgb(169, 54, 160)",
       desc:"Making the same merge twice spawns a temporary unmergeable block. Make unique merges to make it vanish." },
-    { key:"expert",    name:"Expert",    abbr:"EX", accent:"rgb(139, 0, 0)",
-      desc:"Tiles are spawned adversarially.", incompatibleWith:["coinflip"] },
   ];
 
   // Build a symmetric incompatibility map so declaring the relationship on
@@ -80,7 +82,7 @@
     theme: "light",
     lockedDir: null, // direction disabled this turn while Lockout is active
     lastMoveDir: null, // direction of the last move that actually changed the board, disabled this turn while Drunk is active
-    mods: { gravity:false, invisible:false, magician:false, volatile:false, blocked:false, touch:false, coinflip:false, lockout:false, extrovert:false, expert:false, greed:false, sloth:false, shy:false, drunk:false },
+    mods: { gravity:false, invisible:false, magician:false, volatile:false, blocked:false, touch:false, coinflip:false, lockout:false, extrovert:false, expert:false, greed:false, sloth:false, shy:false, drunk:false, doubledown:false },
     chaosMode: false,     // true once the "chaos" cheat code has been typed in the mods menu
     chaosLevel: 1,         // how many mods Chaos Mode keeps active at once (1-5)
     chaosActiveMods: [],   // keys of the mods Chaos Mode currently has switched on
@@ -691,14 +693,17 @@
 
   // ---------- lockout mechanics ----------
   // Dry-runs a move on a scratch copy of the board to see whether it would
-  // change anything, without touching real game state (score included).
+  // change anything, without touching real game state (score or the
+  // in-progress merge log included).
   function wouldMoveChange(direction){
     const savedBoard = state.board;
     const savedMagic = state.magicCounter;
     const savedScore = state.score;
+    const savedMerges = state.lastMerges;
 
     state.board = cloneBoard(savedBoard);
     state.magicCounter = savedMagic.map(row => row.slice());
+    state.lastMerges = [];
     const before = cloneBoard(state.board);
     moveAndMergeOnce(direction);
     const changed = !boardsEqual(before, state.board);
@@ -706,20 +711,28 @@
     state.board = savedBoard;
     state.magicCounter = savedMagic;
     state.score = savedScore;
+    state.lastMerges = savedMerges;
     return changed;
   }
 
   // Picks a random direction to disable for the upcoming move. Never locks
-  // the player's only remaining legal move.
+  // the player's only remaining legal move, and prefers not to lock a
+  // direction Drunk/Double Down are already blocking -- locking one of
+  // those would be redundant and would just get waived immediately anyway.
   function pickLockout(){
     if (!state.mods.lockout){ state.lockedDir = null; return; }
 
     const allDirs = [DIR.LEFT, DIR.RIGHT, DIR.UP, DIR.DOWN];
     const validDirs = allDirs.filter(d => wouldMoveChange(d));
+    const restricted = restrictedDirs();
 
-    let candidates = allDirs;
+    let pool = allDirs.filter(d => !restricted.has(d));
+    if (pool.length === 0) pool = allDirs;
+
+    let candidates = pool;
     if (validDirs.length <= 1){
-      candidates = allDirs.filter(d => d !== validDirs[0]);
+      candidates = pool.filter(d => d !== validDirs[0]);
+      if (candidates.length === 0) candidates = allDirs.filter(d => d !== validDirs[0]);
     }
 
     if (candidates.length === 0){ state.lockedDir = null; return; }
@@ -1014,13 +1027,60 @@
     return true;
   }
 
+  // Returns the direction opposite to the one given (LEFT<->RIGHT, UP<->DOWN).
+  function oppositeDir(direction){
+    return (direction + 2) % 4;
+  }
+
+  // The set of directions currently forbidden by Drunk/Double Down
+  // (independent of whether each direction would even change the board).
+  // Lockout is deliberately excluded here -- it has its own exception below
+  // and should not be released just because Drunk/Double Down happen to be
+  // trapping the player elsewhere.
+  function restrictedDirs(){
+    const restricted = new Set();
+    if (state.mods.drunk && state.lastMoveDir !== null) restricted.add(state.lastMoveDir);
+    if (state.mods.doubledown && state.lastMoveDir !== null) restricted.add(oppositeDir(state.lastMoveDir));
+    return restricted;
+  }
+
+  // True if `direction` is a legal move (changes the board) and every other
+  // direction is either blocked off by Drunk/Double Down or wouldn't change
+  // the board anyway -- i.e. it's the player's only real way to move.
+  // Lockout uses this on its own, so it only ever lets a move through when
+  // it's truly the last resort (accounting for what Drunk/Double Down are
+  // doing), rather than being disabled just because a bypass fired elsewhere.
+  function isOnlyLegalMove(direction){
+    if (!wouldMoveChange(direction)) return false;
+    const allDirs = [DIR.LEFT, DIR.RIGHT, DIR.UP, DIR.DOWN];
+    const restricted = restrictedDirs();
+    return allDirs.every(d => d === direction || restricted.has(d) || !wouldMoveChange(d));
+  }
+
+  // True if, once every currently-active Drunk/Double Down restriction is
+  // applied, no direction is left that both changes the board and is
+  // unrestricted. In that case neither of those mods should block anything
+  // this move -- otherwise, between them, they could trap the player with
+  // zero legal moves even though each mod individually still sees "another
+  // direction" as playable.
+  function noUnrestrictedMoveLeft(){
+    const allDirs = [DIR.LEFT, DIR.RIGHT, DIR.UP, DIR.DOWN];
+    const restricted = restrictedDirs();
+    return allDirs.every(d => restricted.has(d) || !wouldMoveChange(d));
+  }
+
   // ---------- top level move ----------
   function handleMove(direction){
     if (state.gameOver) return;
     if (modalOverlay.classList.contains("show")) return;
     if (infoModalOverlay.classList.contains("show")) return;
-    if (state.mods.lockout && state.lockedDir === direction) return;
-    if (state.mods.drunk && state.lastMoveDir === direction) return;
+
+    if (state.mods.lockout && state.lockedDir === direction && !isOnlyLegalMove(direction)) return;
+
+    if (!noUnrestrictedMoveLeft()){
+      if (state.mods.drunk && state.lastMoveDir === direction) return;
+      if (state.mods.doubledown && state.lastMoveDir !== null && oppositeDir(state.lastMoveDir) === direction) return;
+    }
 
     const before = cloneBoard(state.board);
     state.lastMerges = [];
@@ -1072,8 +1132,8 @@
       }
 
       processExtrovert();
-      pickLockout();
       state.lastMoveDir = direction;
+      pickLockout();
     }
 
     const wasGameOver = state.gameOver;
@@ -1124,6 +1184,12 @@
     [DIR.RIGHT]: document.getElementById("drunkGlowRight"),
     [DIR.UP]:    document.getElementById("drunkGlowUp"),
     [DIR.DOWN]:  document.getElementById("drunkGlowDown"),
+  };
+  const doubledownGlowEls = {
+    [DIR.LEFT]:  document.getElementById("doubledownGlowLeft"),
+    [DIR.RIGHT]: document.getElementById("doubledownGlowRight"),
+    [DIR.UP]:    document.getElementById("doubledownGlowUp"),
+    [DIR.DOWN]:  document.getElementById("doubledownGlowDown"),
   };
   const tapZoneEls = {
     [DIR.UP]:    document.getElementById("tapZoneUp"),
@@ -1484,14 +1550,26 @@
       "--drunk-fade",
       state.animationsEnabled ? ".25s" : "0s"
     );
+    boardWrapEl.style.setProperty(
+      "--doubledown-fade",
+      state.animationsEnabled ? ".25s" : "0s"
+    );
 
-    const lockedDir = (state.mods.lockout && state.lockedDir !== null) ? state.lockedDir : null;
-    const drunkDir = (state.mods.drunk && state.lastMoveDir !== null) ? state.lastMoveDir : null;
+    let lockedDir = (state.mods.lockout && state.lockedDir !== null) ? state.lockedDir : null;
+    let drunkDir = (state.mods.drunk && state.lastMoveDir !== null) ? state.lastMoveDir : null;
+    let doubledownDir = (state.mods.doubledown && state.lastMoveDir !== null) ? oppositeDir(state.lastMoveDir) : null;
+
+    if (lockedDir !== null && isOnlyLegalMove(lockedDir)) lockedDir = null;
+    if (noUnrestrictedMoveLeft()){
+      drunkDir = null;
+      doubledownDir = null;
+    }
 
     for (const dir in lockoutGlowEls){
       // Object keys from a computed-key literal are strings, so compare loosely.
       lockoutGlowEls[dir].classList.toggle("active", lockedDir !== null && Number(dir) === lockedDir);
       drunkGlowEls[dir].classList.toggle("active", drunkDir !== null && Number(dir) === drunkDir);
+      doubledownGlowEls[dir].classList.toggle("active", doubledownDir !== null && Number(dir) === doubledownDir);
     }
   }
 

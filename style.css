@@ -540,6 +540,37 @@ button.pill.secondary.active {
   opacity: 1;
 }
 
+.doubledown-glow {
+  position: absolute;
+  inset: 0;
+  border-radius: 10px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--doubledown-fade, .15s) ease;
+  z-index: 4;
+  animation: lockoutPulse 1.4s ease-in-out infinite;
+}
+
+.doubledown-glow--left {
+  background: linear-gradient(to right, rgba(56, 255, 109, 0.65), rgba(56, 255, 109, 0) 5%);
+}
+
+.doubledown-glow--right {
+  background: linear-gradient(to left, rgba(56, 255, 109, 0.65), rgba(56, 255, 109, 0) 5%);
+}
+
+.doubledown-glow--up {
+  background: linear-gradient(to bottom, rgba(56, 255, 109, 0.65), rgba(56, 255, 109, 0) 5%);
+}
+
+.doubledown-glow--down {
+  background: linear-gradient(to top, rgba(56, 255, 109, 0.65), rgba(56, 255, 109, 0) 5%);
+}
+
+.doubledown-glow.active {
+  opacity: 1;
+}
+
 .extrovert-glow {
   position: absolute;
   top: 0;
