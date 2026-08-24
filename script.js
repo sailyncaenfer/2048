@@ -24,7 +24,7 @@
 
   const MODS = [
     { key:"shy",        name:"Shy",       abbr:"SH", accent:"rgb(216, 148, 231)",
-      desc:"New tiles spawn opposite your move." },
+      desc:"New tiles spawn opposite your move.", incompatibleWith:["clingy"] },
     { key:"gravity",    name:"Gravity",   abbr:"GR", accent:"rgb(93,138,168)",
       desc:"Every move is performed twice." },
     { key:"touch",      name:"Touch",     abbr:"TC", accent:"rgb(0,150,136)",
@@ -41,6 +41,8 @@
       desc:"8's can also spawn: 2 (85%), 4 (10%), 8 (5%)." },
     { key:"volatile",   name:"Volatile",  abbr:"VL", accent:"rgb(252, 76, 228)",
       desc:"Two new tiles spawn after every move instead of one." },
+    { key:"clingy",     name:"Clingy",    abbr:"CL", accent:"rgb(255, 105, 180)",
+      desc:"New tiles spawn as close as possible to the wall you moved toward." },
     { key:"extrovert",  name:"Extrovert", abbr:"XT", accent:"rgb(255, 140, 66)",
       desc:"If the biggest tile sits in the same spot for 7 moves, it swaps with the tile in a fixed spot toward the center." },
     { key:"drunk",      name:"Drunk",     abbr:"DR", accent:"rgb(66, 133, 244)",
@@ -82,7 +84,7 @@
     theme: "light",
     lockedDir: null, // direction disabled this turn while Lockout is active
     lastMoveDir: null, // direction of the last move that actually changed the board, disabled this turn while Drunk is active
-    mods: { gravity:false, invisible:false, magician:false, volatile:false, blocked:false, touch:false, coinflip:false, lockout:false, extrovert:false, expert:false, greed:false, sloth:false, shy:false, drunk:false, doubledown:false },
+    mods: { gravity:false, invisible:false, magician:false, volatile:false, blocked:false, touch:false, coinflip:false, lockout:false, extrovert:false, expert:false, greed:false, sloth:false, shy:false, clingy:false, drunk:false, doubledown:false },
     chaosMode: false,     // true once the "chaos" cheat code has been typed in the mods menu
     chaosLevel: 1,         // how many mods Chaos Mode keeps active at once (1-5)
     chaosActiveMods: [],   // keys of the mods Chaos Mode currently has switched on
@@ -400,21 +402,42 @@
     return cells;
   }
 
-  // ---------- Shy mod: restrict spawns to the far side from the move ----------
+  // ---------- Shy / Clingy mods: restrict spawns relative to the move ----------
   // A tile that just moved (say) right leaves its "wake" along the left
-  // column; Shy confines new spawns to that opposite edge. Falls back to
-  // every empty cell if that edge happens to be completely full, and is a
-  // no-op (returns all empty cells) when Shy is off or no direction is known
-  // (e.g. the two starting tiles at the beginning of a game).
+  // column; Shy confines new spawns to that opposite edge, while Clingy
+  // (its opposite) confines them to the near edge - the wall the tiles
+  // just moved toward. Falls back to every empty cell if the target edge
+  // happens to be completely full, and is a no-op (returns all empty
+  // cells) when neither mod is on or no direction is known (e.g. the two
+  // starting tiles at the beginning of a game). Shy and Clingy are marked
+  // incompatible, so only one of these branches is ever live at a time.
   function shyFilterCells(cells, direction){
-    if (!state.mods.shy || direction === null || direction === undefined) return cells;
+    if (direction === null || direction === undefined) return cells;
+    if (!state.mods.shy && !state.mods.clingy) return cells;
     let filtered;
-    switch (direction){
-      case DIR.LEFT:  filtered = cells.filter(([r,c]) => c === SIZE-1); break; // moved left -> spawn rightmost column
-      case DIR.RIGHT: filtered = cells.filter(([r,c]) => c === 0); break;      // moved right -> spawn leftmost column
-      case DIR.UP:    filtered = cells.filter(([r,c]) => r === SIZE-1); break; // moved up -> spawn bottom row
-      case DIR.DOWN:  filtered = cells.filter(([r,c]) => r === 0); break;      // moved down -> spawn top row
-      default: filtered = cells;
+    if (state.mods.shy){
+      switch (direction){
+        case DIR.LEFT:  filtered = cells.filter(([r,c]) => c === SIZE-1); break; // moved left -> spawn rightmost column
+        case DIR.RIGHT: filtered = cells.filter(([r,c]) => c === 0); break;      // moved right -> spawn leftmost column
+        case DIR.UP:    filtered = cells.filter(([r,c]) => r === SIZE-1); break; // moved up -> spawn bottom row
+        case DIR.DOWN:  filtered = cells.filter(([r,c]) => r === 0); break;      // moved down -> spawn top row
+        default: filtered = cells;
+      }
+    } else {
+      let dist; // 0 = touching the wall the tiles just moved toward
+      switch (direction){
+        case DIR.LEFT:  dist = ([r,c]) => c; break;
+        case DIR.RIGHT: dist = ([r,c]) => SIZE-1-c; break;
+        case DIR.UP:    dist = ([r,c]) => r; break;
+        case DIR.DOWN:  dist = ([r,c]) => SIZE-1-r; break;
+        default: dist = null;
+      }
+      if (dist === null){
+        filtered = cells;
+      } else {
+        const minDist = Math.min(...cells.map(dist));
+        filtered = cells.filter(cell => dist(cell) === minDist);
+      }
     }
     return filtered.length > 0 ? filtered : cells;
   }

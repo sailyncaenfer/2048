@@ -642,10 +642,10 @@
         }
       }
 
-      // If Shy narrowed things down, mask every empty cell that isn't in the
-      // allowed set as temporarily occupied so the adversarial search only
-      // ever considers the legal side of the board.
-      if (state.mods.shy){
+      // If Shy or Clingy narrowed things down, mask every empty cell that
+      // isn't in the allowed set as temporarily occupied so the adversarial
+      // search only ever considers the legal side of the board.
+      if (state.mods.shy || state.mods.clingy){
         const allowed = new Set(cells.map(([r,c]) => r*SIZE+c));
         for (let r=0;r<SIZE;r++){
           for (let c=0;c<SIZE;c++){
