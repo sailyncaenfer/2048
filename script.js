@@ -43,6 +43,8 @@
       desc:"Two new tiles spawn after every move instead of one." },
     { key:"clingy",     name:"Clingy",    abbr:"CL", accent:"rgb(255, 105, 180)",
       desc:"New tiles spawn as close as possible to the wall you moved toward." },
+    { key:"impatient",  name:"Impatient", abbr:"IM", accent:"rgb(255, 193, 7)",
+      desc:"New tiles spawn before your move is performed, instead of after." },
     { key:"extrovert",  name:"Extrovert", abbr:"XT", accent:"rgb(255, 140, 66)",
       desc:"If the biggest tile sits in the same spot for 7 moves, it swaps with the tile in a fixed spot toward the center." },
     { key:"drunk",      name:"Drunk",     abbr:"DR", accent:"rgb(66, 133, 244)",
@@ -55,8 +57,6 @@
       desc:"Tiles are spawned to your disadvantage.", incompatibleWith:["coinflip"] },
     { key:"magician",   name:"Magician",  abbr:"MG", accent:"rgb(169, 54, 160)",
       desc:"Making the same merge twice spawns a temporary unmergeable block. Make unique merges to make it vanish." },
-    { key:"impatient",  name:"Impatient", abbr:"IM", accent:"rgb(255, 193, 7)",
-      desc:"New tiles spawn before your move is performed, instead of after." },
   ];
 
   // Build a symmetric incompatibility map so declaring the relationship on
