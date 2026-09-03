@@ -26,7 +26,7 @@
     { key:"shy",        name:"Shy",       abbr:"SH", accent:"rgb(216, 148, 231)",
       desc:"New tiles spawn opposite your move.", incompatibleWith:["clingy"] },
     { key:"gravity",    name:"Gravity",   abbr:"GR", accent:"rgb(93,138,168)",
-      desc:"Every move is performed twice." },
+      desc:"Every move is performed repeatedly." },
     { key:"touch",      name:"Touch",     abbr:"TC", accent:"rgb(0,150,136)",
       desc:"Only adjacent tiles can be merged." },
     { key:"blocked",    name:"Blocked",   abbr:"BL", accent:"rgb(40,36,30)",
@@ -55,6 +55,8 @@
       desc:"Tiles are spawned to your disadvantage.", incompatibleWith:["coinflip"] },
     { key:"magician",   name:"Magician",  abbr:"MG", accent:"rgb(169, 54, 160)",
       desc:"Making the same merge twice spawns a temporary unmergeable block. Make unique merges to make it vanish." },
+    { key:"impatient",  name:"Impatient", abbr:"IM", accent:"rgb(255, 193, 7)",
+      desc:"New tiles spawn before your move is performed, instead of after." },
   ];
 
   // Build a symmetric incompatibility map so declaring the relationship on
@@ -84,7 +86,7 @@
     theme: "light",
     lockedDir: null, // direction disabled this turn while Lockout is active
     lastMoveDir: null, // direction of the last move that actually changed the board, disabled this turn while Drunk is active
-    mods: { gravity:false, invisible:false, magician:false, volatile:false, blocked:false, touch:false, coinflip:false, lockout:false, extrovert:false, expert:false, greed:false, sloth:false, shy:false, clingy:false, drunk:false, doubledown:false },
+    mods: { gravity:false, invisible:false, magician:false, volatile:false, blocked:false, touch:false, coinflip:false, lockout:false, extrovert:false, expert:false, greed:false, sloth:false, shy:false, clingy:false, drunk:false, doubledown:false, impatient:false },
     chaosMode: false,     // true once the "chaos" cheat code has been typed in the mods menu
     chaosLevel: 1,         // how many mods Chaos Mode keeps active at once (1-5)
     chaosActiveMods: [],   // keys of the mods Chaos Mode currently has switched on
@@ -1092,6 +1094,66 @@
     return allDirs.every(d => restricted.has(d) || !wouldMoveChange(d));
   }
 
+  // Places this move's new tile(s) on the board (obstacle/expert/random,
+  // doubled up under Volatile), honoring whatever Chaos Mode rolled for
+  // this move. Shared by the normal spawn-after-move flow and Impatient's
+  // spawn-before-move flow -- both just call this at different points
+  // relative to moveAndMergeOnce. Returns the flat indices spawned into.
+  function spawnForMove(direction){
+    const justSpawned = [];
+
+    const chaosSwitchedToBlocked = state.chaosMode ? maybeChaosSwitch() : false;
+
+    if (chaosSwitchedToBlocked){
+      // Blocked just got dealt in by Chaos Mode: its obstacle tile takes
+      // priority over the normal random spawn this move.
+      const sB = randomSpawnBlock(direction);
+      if (sB !== null) justSpawned.push(sB);
+    } else {
+      const s1 = state.mods.expert ? expertSpawn(direction) : randomSpawn(direction);
+      if (s1 !== null) justSpawned.push(s1);
+      if (state.mods.volatile){
+        const s2 = state.mods.expert ? expertSpawn(direction) : randomSpawn(direction);
+        if (s2 !== null) justSpawned.push(s2);
+      }
+    }
+
+    return justSpawned;
+  }
+
+  // Impatient's spawned tile(s) may still slide or get merged away during
+  // the move that follows them, so their original spawn position (a flat
+  // r*SIZE+c index) can go stale. This walks each spawned tile's id
+  // forward through this move's merge chain (state.lastMerges) to find
+  // whatever id it ended up as -- itself, if it survived unmerged, or the
+  // survivor it merged into otherwise -- and returns the current on-board
+  // locations of those ids, so Invisible keeps revealing the right cells.
+  function resolveSpawnLocs(ids){
+    if (!ids || ids.length === 0) return [];
+    const consumedToSurvivor = new Map();
+    for (const m of state.lastMerges) consumedToSurvivor.set(m.consumedId, m.survivorId);
+
+    const resolvedIds = new Set();
+    ids.forEach(id => {
+      let cur = id;
+      const seen = new Set();
+      while (consumedToSurvivor.has(cur) && !seen.has(cur)){
+        seen.add(cur);
+        cur = consumedToSurvivor.get(cur);
+      }
+      resolvedIds.add(cur);
+    });
+
+    const locs = [];
+    for (let r=0;r<SIZE;r++){
+      for (let c=0;c<SIZE;c++){
+        const cell = state.board[r][c];
+        if (cell && resolvedIds.has(cell.id)) locs.push(r*SIZE + c);
+      }
+    }
+    return locs;
+  }
+
   // ---------- top level move ----------
   function handleMove(direction){
     if (state.gameOver) return;
@@ -1105,17 +1167,52 @@
       if (state.mods.doubledown && state.lastMoveDir !== null && oppositeDir(state.lastMoveDir) === direction) return;
     }
 
+    let justSpawned = [];
+    let impatientSpawnedIds = null;
+
+    // Impatient spawns its new tile(s) BEFORE the slide/merge instead of
+    // after. It only does so when this move would actually change the
+    // board -- wouldMoveChange dry-runs the move on a scratch copy, same
+    // check the real move uses below, just done up front here so nothing
+    // is conjured onto the board for a no-op move. Because the spawn
+    // lands on the board ahead of the move, Expert's adversarial search
+    // (which already maximizes over all four directions when judging how
+    // good a resulting position is for the player, regardless of which
+    // direction is passed in) ends up picking the worst spawn against any
+    // direction the player could take, not just the one about to be
+    // played -- exactly the harder, direction-agnostic version of Expert
+    // that makes sense once the tile shows up before the move does.
+    if (state.mods.impatient && wouldMoveChange(direction)){
+      justSpawned = spawnForMove(direction);
+      state.spawnLocs = justSpawned;
+      impatientSpawnedIds = justSpawned
+        .map(loc => {
+          const cell = state.board[Math.floor(loc / SIZE)][loc % SIZE];
+          return cell ? cell.id : null;
+        })
+        .filter(id => id !== null);
+    }
+
     const before = cloneBoard(state.board);
     state.lastMerges = [];
     let mergeValues = moveAndMergeOnce(direction);
 
     if (state.mods.gravity){
-      mergeValues = mergeValues.concat(moveAndMergeOnce(direction));
+      let gravityBoard = cloneBoard(state.board);
+      while (true){
+        mergeValues = mergeValues.concat(moveAndMergeOnce(direction));
+        if (boardsEqual(gravityBoard, state.board)) break;
+        gravityBoard = cloneBoard(state.board);
+      }
     }
 
-    let justSpawned = [];
-
     const changed = !boardsEqual(before, state.board);
+
+    if (impatientSpawnedIds && impatientSpawnedIds.length){
+      // Re-locate Impatient's spawn(s) now that the move has actually
+      // played out, since they may have slid or merged elsewhere.
+      state.spawnLocs = resolveSpawnLocs(impatientSpawnedIds);
+    }
 
     if (changed){
       state.dirCounts[direction] = (state.dirCounts[direction] || 0) + 1;
@@ -1131,22 +1228,10 @@
         // leaving the old state.magicLog exactly as it was.
       }
 
-      const chaosSwitchedToBlocked = state.chaosMode ? maybeChaosSwitch() : false;
-
-      if (chaosSwitchedToBlocked){
-        // Blocked just got dealt in by Chaos Mode: its obstacle tile takes
-        // priority over the normal random spawn this move.
-        const sB = randomSpawnBlock(direction);
-        if (sB !== null) justSpawned.push(sB);
-      } else {
-        const s1 = state.mods.expert ? expertSpawn(direction) : randomSpawn(direction);
-        if (s1 !== null) justSpawned.push(s1);
-        if (state.mods.volatile){
-          const s2 = state.mods.expert ? expertSpawn(direction) : randomSpawn(direction);
-          if (s2 !== null) justSpawned.push(s2);
-        }
+      if (!state.mods.impatient){
+        justSpawned = spawnForMove(direction);
+        state.spawnLocs = justSpawned;
       }
-      state.spawnLocs = justSpawned;
 
       state.moveCount += 1;
       if (state.score > state.best){
