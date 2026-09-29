@@ -24,7 +24,7 @@
 
   const MODS = [
     { key:"shy",        name:"Shy",       abbr:"SH", accent:"rgb(216, 148, 231)",
-      desc:"New tiles spawn opposite your move.", incompatibleWith:["clingy"] },
+      desc:"New tiles spawn as far as possible from your big tiles.", incompatibleWith:["clingy"] },
     { key:"gravity",    name:"Gravity",   abbr:"GR", accent:"rgb(93,138,168)",
       desc:"Every move is performed repeatedly.", incompatibleWith:["sloth"] },
     { key:"touch",      name:"Touch",     abbr:"TC", accent:"rgb(0,150,136)",
@@ -41,8 +41,6 @@
       desc:"8's can also spawn: 2 (85%), 4 (10%), 8 (5%)." },
     { key:"volatile",   name:"Volatile",  abbr:"VL", accent:"rgb(252, 76, 228)",
       desc:"Two new tiles spawn after every move instead of one." },
-    { key:"clingy",     name:"Clingy",    abbr:"CL", accent:"rgb(255, 105, 180)",
-      desc:"New tiles spawn as close as possible to the wall you moved toward." },
     { key:"impatient",  name:"Impatient", abbr:"IM", accent:"rgb(255, 193, 7)",
       desc:"New tiles spawn before your move is performed, instead of after." },
     { key:"extrovert",  name:"Extrovert", abbr:"XT", accent:"rgb(255, 140, 66)",
@@ -53,6 +51,8 @@
       desc:"You can't move opposite your previous move." },
     { key:"lockout",    name:"Lockout",   abbr:"LO", accent:"rgb(255, 79, 79)",
       desc:"A random direction is disabled every move." },
+    { key:"clingy",     name:"Clingy",    abbr:"CL", accent:"rgb(255, 105, 180)",
+      desc:"New tiles spawn as close as possible to your big tiles." },
     { key:"expert",     name:"Expert",    abbr:"EX", accent:"rgb(139, 0, 0)",
       desc:"Tiles are spawned to your disadvantage.", incompatibleWith:["coinflip"] },
     { key:"magician",   name:"Magician",  abbr:"MG", accent:"rgb(169, 54, 160)",
@@ -404,43 +404,55 @@
     return cells;
   }
 
-  // ---------- Shy / Clingy mods: restrict spawns relative to the move ----------
-  // A tile that just moved (say) right leaves its "wake" along the left
-  // column; Shy confines new spawns to that opposite edge, while Clingy
-  // (its opposite) confines them to the near edge - the wall the tiles
-  // just moved toward. Falls back to every empty cell if the target edge
-  // happens to be completely full, and is a no-op (returns all empty
-  // cells) when neither mod is on or no direction is known (e.g. the two
-  // starting tiles at the beginning of a game). Shy and Clingy are marked
-  // incompatible, so only one of these branches is ever live at a time.
+  // ---------- Shy / Clingy mods: distance-scored spawns ----------
+  // Every candidate (empty) cell is scored against every non-empty cell:
+  // the straight-line (Pythagorean) distance between the two is multiplied
+  // by the non-empty cell's tile value, and those products are summed.
+  //   Shy:    picks the candidate(s) with the highest score, so new tiles
+  //           land far from the big tiles.
+  //   Clingy: same, except each distance is first flipped to
+  //           (farthest distance - distance), where the farthest distance
+  //           is the largest candidate-to-tile distance on the current
+  //           board. Near tiles now count the most, so new tiles land
+  //           next to the big tiles.
+  // Ties are kept, so the caller's random pick breaks them. The move
+  // direction no longer matters. With no tiles on the board every score is
+  // 0, so every cell ties and the spawn is uniformly random. Shy and Clingy
+  // are marked incompatible, so only one branch is ever live at a time.
+  // (The direction parameter is kept only so existing callers still work.)
   function shyFilterCells(cells, direction){
-    if (direction === null || direction === undefined) return cells;
     if (!state.mods.shy && !state.mods.clingy) return cells;
-    let filtered;
-    if (state.mods.shy){
-      switch (direction){
-        case DIR.LEFT:  filtered = cells.filter(([r,c]) => c === SIZE-1); break; // moved left -> spawn rightmost column
-        case DIR.RIGHT: filtered = cells.filter(([r,c]) => c === 0); break;      // moved right -> spawn leftmost column
-        case DIR.UP:    filtered = cells.filter(([r,c]) => r === SIZE-1); break; // moved up -> spawn bottom row
-        case DIR.DOWN:  filtered = cells.filter(([r,c]) => r === 0); break;      // moved down -> spawn top row
-        default: filtered = cells;
-      }
-    } else {
-      let dist; // 0 = touching the wall the tiles just moved toward
-      switch (direction){
-        case DIR.LEFT:  dist = ([r,c]) => c; break;
-        case DIR.RIGHT: dist = ([r,c]) => SIZE-1-c; break;
-        case DIR.UP:    dist = ([r,c]) => r; break;
-        case DIR.DOWN:  dist = ([r,c]) => SIZE-1-r; break;
-        default: dist = null;
-      }
-      if (dist === null){
-        filtered = cells;
-      } else {
-        const minDist = Math.min(...cells.map(dist));
-        filtered = cells.filter(cell => dist(cell) === minDist);
+    if (cells.length === 0) return cells;
+
+    const tiles = [];
+    for (let r=0;r<SIZE;r++){
+      for (let c=0;c<SIZE;c++){
+        const t = state.board[r][c];
+        if (t !== null) tiles.push([r, c, t.value]);
       }
     }
+    if (tiles.length === 0) return cells;
+
+    // distances[i][j] = distance from candidate i to non-empty cell j
+    const distances = cells.map(([r,c]) => tiles.map(([tr,tc]) => Math.hypot(r-tr, c-tc)));
+
+    let farthest = 0;
+    if (state.mods.clingy){
+      for (const row of distances) for (const d of row) if (d > farthest) farthest = d;
+    }
+
+    const scores = distances.map(row => {
+      let sum = 0;
+      for (let j=0;j<tiles.length;j++){
+        const d = state.mods.clingy ? farthest - row[j] : row[j];
+        sum += d * tiles[j][2];
+      }
+      return sum;
+    });
+
+    const EPS = 1e-9; // floating-point tolerance so equal-by-symmetry cells still tie
+    const best = Math.max(...scores);
+    const filtered = cells.filter((_, i) => scores[i] >= best - EPS);
     return filtered.length > 0 ? filtered : cells;
   }
 
